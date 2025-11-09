@@ -9,6 +9,7 @@ data class Product(
     val description: String,
     val imageUrl: String,
     val category: String,
+    val localImageName: String, // Filename in assets/products/ folder
     val sizes: List<String> = listOf("S", "M", "L", "XL"),
     val colors: List<String> = listOf("Black", "White", "Blue", "Red")
 ) : Serializable
