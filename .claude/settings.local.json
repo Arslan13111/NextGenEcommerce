@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce\\app\\src\\main\\assets\" /s /b 2)",
+      "Bash(nul)",
+      "Bash(dir \"C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce\\app\\src\\main\\assets\\products\" /b 2)",
+      "Bash(gradlew.bat assembleDebug:*)",
+      "Bash(dir \"C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce\")",
+      "Bash(findstr:*)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug --stacktrace\")",
+      "Bash(dir:*)",
+      "Bash(.gradlew.bat assembleDebug)",
+      "Bash(cmd /c \"cd /d C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce && gradlew.bat assembleDebug\")",
+      "Bash(cmd /c \"C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce\\gradlew.bat assembleDebug --stacktrace\")",
+      "Bash(cmd /c \"cd /d C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce && gradlew.bat assembleDebug --stacktrace\")",
+      "Bash(C:UsersarslaAndroidStudioProjectsNextGenEcommercegradlew.bat assembleDebug)",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(ren \"C:\\Users\\arsla\\AndroidStudioProjects\\NextGenEcommerce\\app\\src\\main\\assets\\products\\formal_tshirt.png\" \"formal_shirt.jpg\")",
+      "Bash(./gradlew.bat assembleDebug)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug 2>&1 | tail -50\")",
+      "Bash(cmd /c build_project.bat)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
