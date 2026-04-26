@@ -1,0 +1,69 @@
+ Title: Admin Color Picker, Hex Color Support & Product Update Fix                                                                                                                                                                 
+                                                                                                                                                                                                                                  
+  ---                                                                                                                                                                                                                               
+  Overview                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+  Added a full color management system to the admin panel — admins can now tap any color swatch to open a visual color picker with 30 fashion presets and custom hex input. Fixed hex colors not rendering throughout the app,      
+  resolved a build error, and fixed the "Update Product" crash caused by missing Supabase columns.                                                                                                                                
+
+  ---
+  Changes Made
+
+  1. Build Fix — AdminDashboardScreen.kt
+
+  - Replaced 4 instances of HorizontalDivider with Divider
+  - HorizontalDivider only exists in Material3 1.2.0+; the project uses BOM 2023.10.01 which bundles Material3 1.1.3
+
+  ---
+  2. New File — ColorPickerDialog.kt
+
+  Created a shared color picker dialog used across the entire admin panel:
+  - 30 fashion preset colors (Black, White, Red, Blue, Navy Blue, Coral Red, Olive, Teal, Lavender, Burgundy, etc.) displayed in a 5-column grid
+  - Custom hex color input field (#RRGGBB) with live color preview circle
+  - Brightness-based checkmark tint (black on light colors, white on dark)
+  - colorNameToPreview() utility function handles both named colors and hex strings
+
+  ---
+  3. Admin Dashboard — AdminDashboardScreen.kt
+
+  - Replaced the old "X colors" badge on each product card with a row of tappable colored dots (one per color variant)
+  - Tapping a color dot opens ColorPickerDialog for that specific color
+  - On selection, updates both the colors[] array and the colorImages{} map in Supabase — preserving the image URL while swapping the color name/key
+  - Fixed success snackbar: now correctly says "Color updated successfully" for color changes and "Product deleted successfully" for deletes (previously both showed "Product deleted")
+
+  ---
+  4. Add/Edit Product Screen — AddProductScreen.kt
+
+  - Added ColorPickerDialog in three modes:
+    - DIRECT_VARIANT — tap a swatch on an existing variant to rename its color
+    - EDIT_FORM — tap the swatch while editing a variant in-place
+    - PENDING — tap the swatch while building a new variant
+  - Added LaunchedEffect(Unit) on screen entry to reset any stale operation state left over from dashboard actions (previously a color change in the dashboard could cause a phantom error or instant navigation when entering Edit 
+  Product)
+  - Replaced the old previewColor() helper with the shared colorNameToPreview() from ColorPickerDialog.kt
+
+  ---
+  5. Hex Color Rendering Fix
+
+  All three places that display color swatches were updated to handle hex strings (#RRGGBB) and 16 new named presets that were previously falling back to gray:
+
+  - ProductDetailScreen.kt — color selector swatches on the product page
+  - CartItemCard.kt — color dot next to the selected color in cart
+  - CheckoutScreen.kt — color dot in the order summary
+
+  ---
+  6. Supabase Schema Fix
+
+  Root cause of "Update Product" error: The products table was missing two columns that SupabaseProduct sends in every insert/update request. Supabase returned: "Could not find the 'color_images' column of 'products' in the     
+  schema cache".
+
+  - Created supabase_add_color_images.sql — a one-time migration to run in the Supabase SQL Editor:
+  ALTER TABLE products ADD COLUMN IF NOT EXISTS color_images JSONB NOT NULL DEFAULT '{}';
+  ALTER TABLE products ADD COLUMN IF NOT EXISTS lens_id TEXT;
+  - Updated supabase_products_setup.sql to include both columns so fresh setups don't have this problem
+
+  ---
+  7. Project Setup
+
+  - Created README.md covering features, tech stack, architecture, data models, Supabase setup, backend setup, and admin panel usage
+  - Updated .gitignore to exclude sensitive files (backend/.env, client_secret*.json, *.jks, *.keystore, *.apk, *.aab, app/release/)
+  - Initialized git repository with a clean initial commit
