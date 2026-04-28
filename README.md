@@ -4,6 +4,31 @@ A full-featured Android e-commerce app for fashion retail, with AI-powered virtu
 
 ---
 
+## Latest Update: Performance & Branding Optimization (v3.0 Final)
+
+### **Title: Application Branding & Theme System Optimization**
+
+**Description:**
+This update establishes a cohesive visual identity and ensures a seamless user experience across different system settings and device types.
+
+#### **1. Branding & Logo Integration**
+*   **Universal Logo Update:** Replaced all placeholder branding with the official `logo.png` across Splash, Login, Register, and About screens.
+*   **Circular Identity:** Applied a precise circular crop and high-quality scaling to the logo on authentication screens.
+*   **Custom Home Header:** Integrated a specialized `home_logo.png` into the Home screen's top bar, optimized for a professional look.
+*   **Launcher Refresh:** Updated the Android system launcher and round icons to match the new branding.
+
+#### **2. Intelligent Theme System**
+*   **System Theme Synchronization:** The app now automatically toggles between Light and Dark modes in real-time based on the user's Android system settings.
+*   **Enhanced Settings Control:** Added a "Follow System" toggle in the settings menu for automated or manual appearance management.
+
+#### **3. Performance & Structural Stability**
+*   **Layout Stabilization:** Moved the Navigation Bar to a persistent overlay to eliminate "layout jumping" during screen transitions.
+*   **Recomposition Reduction:** Implemented `derivedStateOf` in critical UI components (`HomeScreen`, `ProductDetailScreen`) to improve scrolling performance and reduce CPU usage.
+*   **Build Optimization:** Enabled R8 code minification and resource shrinking for a smaller, faster final APK.
+*   **Smooth Transitions:** Standardized 300ms cross-fade animations for all screen navigation.
+
+---
+
 ## Features
 
 ### Shopping
