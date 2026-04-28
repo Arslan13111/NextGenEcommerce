@@ -15,6 +15,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.nextgenecommerce.R
 import androidx.navigation.NavController
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,11 +74,13 @@ fun AboutScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingBag,
+                        androidx.compose.foundation.Image(
+                            painter = painterResource(id = R.drawable.logo),
                             contentDescription = null,
-                            modifier = Modifier.size(60.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
                         )
                     }
                 }

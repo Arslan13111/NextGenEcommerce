@@ -14,9 +14,11 @@ import com.example.nextgenecommerce.data.models.*
         ProductEntity::class,
         CartItem::class,
         WishlistItem::class,
-        Order::class
+        Order::class,
+        NotificationEntity::class,
+        AddressEntity::class
     ],
-    version = 1,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -27,6 +29,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun cartDao(): CartDao
     abstract fun wishlistDao(): WishlistDao
     abstract fun orderDao(): OrderDao
+    abstract fun notificationDao(): NotificationDao
+    abstract fun addressDao(): AddressDao
 
     companion object {
         @Volatile

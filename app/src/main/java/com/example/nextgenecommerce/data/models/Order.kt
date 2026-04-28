@@ -11,17 +11,23 @@ data class Order(
     @PrimaryKey
     val id: String = "",
     val userId: String = "",
+    val orderNumber: String = "",
     val items: List<OrderItem> = emptyList(),
     val subtotal: Double = 0.0,
     val tax: Double = 0.0,
     val shipping: Double = 0.0,
     val total: Double = 0.0,
+    val currency: String = "PKR",
     val status: OrderStatus = OrderStatus.PENDING,
     val paymentStatus: PaymentStatus = PaymentStatus.PENDING,
-    val paymentMethod: String = "",
+    val paymentMethod: PaymentMethod = PaymentMethod.CASH_ON_DELIVERY,
     val shippingAddress: Address? = null,
     val trackingNumber: String? = null,
     val estimatedDelivery: Long? = null,
+    val cancellationReason: String? = null,
+    val returnReason: String? = null,
+    val returnImages: List<String> = emptyList(),
+    val adminReturnNote: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -44,7 +50,9 @@ enum class OrderStatus {
     OUT_FOR_DELIVERY,
     DELIVERED,
     CANCELLED,
-    RETURNED
+    RETURN_REQUESTED,
+    RETURNED,
+    RETURN_REJECTED
 }
 
 enum class PaymentStatus {
@@ -52,6 +60,13 @@ enum class PaymentStatus {
     COMPLETED,
     FAILED,
     REFUNDED
+}
+
+enum class PaymentMethod {
+    EASYPAISA,
+    JAZZCASH,
+    CASH_ON_DELIVERY,
+    SAFEPAY
 }
 
 data class OrderTracking(

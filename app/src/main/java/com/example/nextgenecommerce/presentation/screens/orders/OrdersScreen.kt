@@ -26,6 +26,7 @@ import com.example.nextgenecommerce.data.models.Order
 import com.example.nextgenecommerce.data.models.OrderStatus
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.OrderViewModel
+import com.example.nextgenecommerce.util.ColorUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,7 +38,7 @@ fun OrdersScreen(
 ) {
     val orders by orderViewModel.orders.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("All", "Pending", "Shipped", "Delivered")
+    val tabs = listOf("All", "Pending", "Shipped", "Delivered", "Returns")
 
     // Filter orders based on selected tab
     val filteredOrders = remember(orders, selectedTab) {
@@ -46,13 +47,13 @@ fun OrdersScreen(
             1 -> orders.filter { it.status in listOf(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PROCESSING) }
             2 -> orders.filter { it.status in listOf(OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY) }
             3 -> orders.filter { it.status == OrderStatus.DELIVERED }
+            4 -> orders.filter { it.status in listOf(OrderStatus.RETURN_REQUESTED, OrderStatus.RETURNED) }
             else -> orders
         }
     }
 
     LaunchedEffect(Unit) {
-        // Load orders for current user
-        orderViewModel.loadOrders("current_user_id") // Replace with actual user ID
+        orderViewModel.loadOrders()
     }
 
     Scaffold(
@@ -265,7 +266,7 @@ private fun OrderCard(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Qty: ${item.quantity}",
+                            text = "${item.selectedSize} · ${ColorUtils.getColorDisplayName(item.selectedColor)} · Qty: ${item.quantity}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -337,7 +338,9 @@ private fun getStatusColor(status: OrderStatus): androidx.compose.ui.graphics.Co
         OrderStatus.PROCESSING -> MaterialTheme.colorScheme.tertiary
         OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary
         OrderStatus.DELIVERED -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
-        OrderStatus.CANCELLED, OrderStatus.RETURNED -> MaterialTheme.colorScheme.error
+        OrderStatus.RETURN_REQUESTED -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
+        OrderStatus.RETURNED -> androidx.compose.ui.graphics.Color(0xFF6D4C41)
+        OrderStatus.CANCELLED, OrderStatus.RETURN_REJECTED -> MaterialTheme.colorScheme.error
     }
 }
 
@@ -350,7 +353,9 @@ private fun formatStatus(status: OrderStatus): String {
         OrderStatus.OUT_FOR_DELIVERY -> "Out for Delivery"
         OrderStatus.DELIVERED -> "Delivered"
         OrderStatus.CANCELLED -> "Cancelled"
+        OrderStatus.RETURN_REQUESTED -> "Return Requested"
         OrderStatus.RETURNED -> "Returned"
+        OrderStatus.RETURN_REJECTED -> "Return Rejected"
     }
 }
 

@@ -4,13 +4,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,18 +32,16 @@ fun SettingsScreen(
     themeViewModel: ThemeViewModel = hiltViewModel()
 ) {
     val darkModeEnabled by themeViewModel.darkMode.collectAsState()
+    val useSystemTheme by themeViewModel.useSystemTheme.collectAsState()
     val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         "Settings",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 },
                 navigationIcon = {
@@ -45,188 +49,207 @@ fun SettingsScreen(
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         }
-    ) { paddingValues ->
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .padding(paddingValues)
+                .padding(padding)
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Appearance Section
-            SettingsSection(title = "Appearance")
+            // ── Appearance ───────────────────────────────────────────────────
+            SettingsSectionHeader("Appearance")
 
-            SettingsItem(
+            SettingsToggleItem(
+                icon = Icons.Default.SettingsSuggest,
+                title = "Follow System",
+                subtitle = "Match app appearance with your device settings",
+                checked = useSystemTheme,
+                onCheckedChange = { themeViewModel.toggleUseSystemTheme(it) }
+            )
+
+            SettingsToggleItem(
                 icon = Icons.Default.DarkMode,
                 title = "Dark Mode",
-                subtitle = "Enable dark theme",
-                trailing = {
-                    Switch(
-                        checked = darkModeEnabled,
-                        onCheckedChange = { themeViewModel.toggleDarkMode(it) }
-                    )
-                }
+                subtitle = "Manually switch to dark theme",
+                checked = darkModeEnabled,
+                enabled = !useSystemTheme,
+                onCheckedChange = { themeViewModel.toggleDarkMode(it) }
             )
 
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            // ── Notifications ────────────────────────────────────────────────
+            SettingsSectionHeader("Notifications")
 
-            // Notifications Section
-            SettingsSection(title = "Notifications")
-
-            SettingsItem(
+            SettingsToggleItem(
                 icon = Icons.Default.Notifications,
                 title = "Push Notifications",
-                subtitle = "Receive order updates and offers",
-                trailing = {
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { themeViewModel.toggleNotifications(it) }
-                    )
-                }
+                subtitle = "Order updates, promotions and new arrivals",
+                checked = notificationsEnabled,
+                onCheckedChange = { themeViewModel.toggleNotifications(it) }
             )
 
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            // Account Section
-            SettingsSection(title = "Account")
-
-            SettingsItem(
-                icon = Icons.Default.Person,
-                title = "Edit Profile",
-                subtitle = "Update your personal information",
-                onClick = { navController.navigate("profile") }
+            SettingsToggleItem(
+                icon = Icons.Default.Email,
+                title = "Email Notifications",
+                subtitle = "Receive weekly newsletters and offers",
+                checked = true,
+                onCheckedChange = { /* future */ }
             )
 
-            SettingsItem(
-                icon = Icons.Default.Lock,
-                title = "Change Password",
-                subtitle = "Update your password",
-                onClick = { navController.navigate(Screen.ChangePassword.route) }
+            // ── Privacy ──────────────────────────────────────────────────────
+            SettingsSectionHeader("Privacy & Data")
+
+            SettingsLinkItem(
+                icon = Icons.Default.Security,
+                title = "Privacy Policy",
+                subtitle = "How we handle your personal data",
+                onClick = { /* navigate */ }
             )
 
-            SettingsItem(
-                icon = Icons.Default.LocationOn,
-                title = "Manage Addresses",
-                subtitle = "Edit shipping and billing addresses",
-                onClick = { navController.navigate(Screen.Addresses.route) }
+            SettingsLinkItem(
+                icon = Icons.Default.Description,
+                title = "Terms & Conditions",
+                subtitle = "App usage terms",
+                onClick = { /* navigate */ }
             )
 
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            // Support Section
-            SettingsSection(title = "Support")
-
-            SettingsItem(
-                icon = Icons.Default.Help,
-                title = "Help Center",
-                subtitle = "Get help and support",
-                onClick = { navController.navigate(Screen.HelpCenter.route) }
+            SettingsLinkItem(
+                icon = Icons.Default.Tune,
+                title = "Data Preferences",
+                subtitle = "Manage analytics and tracking",
+                onClick = { /* navigate */ }
             )
 
-            SettingsItem(
+            // ── About ─────────────────────────────────────────────────────────
+            SettingsSectionHeader("About")
+
+            SettingsLinkItem(
                 icon = Icons.Default.Info,
-                title = "About",
-                subtitle = "App version and information",
+                title = "About NextGen",
+                subtitle = "App version and team info",
                 onClick = { navController.navigate(Screen.About.route) }
             )
 
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            // Logout
-            SettingsItem(
-                icon = Icons.Default.Logout,
-                title = "Logout",
-                subtitle = "Sign out of your account",
-                onClick = { /* TODO: Implement logout */ },
-                titleColor = MaterialTheme.colorScheme.error
+            SettingsLinkItem(
+                icon = Icons.Default.Help,
+                title = "Help Center",
+                subtitle = "FAQs and support",
+                onClick = { navController.navigate(Screen.HelpCenter.route) }
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            // Version chip
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("App Version", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("1.0.0", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun SettingsSection(title: String) {
+private fun SettingsSectionHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.labelLarge.copy(
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp
-        ),
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
     )
 }
 
 @Composable
-private fun SettingsItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun SettingsToggleItem(
+    icon: ImageVector,
     title: String,
     subtitle: String,
-    onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    titleColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
 ) {
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (onClick != null) Modifier.clickable(onClick = onClick)
-                else Modifier
-            ),
-        color = MaterialTheme.colorScheme.surface
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (enabled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = if (titleColor != androidx.compose.ui.graphics.Color.Unspecified)
-                    titleColor
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
+        Icon(
+            icon, 
+            null, 
+            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), 
+            modifier = Modifier.size(22.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title, 
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             )
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.Medium
-                    ),
-                    color = titleColor.takeIf { it != androidx.compose.ui.graphics.Color.Unspecified }
-                        ?: MaterialTheme.colorScheme.onSurface
-                )
-
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (trailing != null) {
-                trailing()
-            } else if (onClick != null) {
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Navigate",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                subtitle, 
+                style = MaterialTheme.typography.bodySmall, 
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
         }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF111111),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = MaterialTheme.colorScheme.outline
+            )
+        )
+    }
+}
+
+@Composable
+private fun SettingsLinkItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
     }
 }

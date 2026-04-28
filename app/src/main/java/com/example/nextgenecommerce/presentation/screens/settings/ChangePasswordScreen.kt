@@ -19,13 +19,18 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
+import com.example.nextgenecommerce.util.Resource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChangePasswordScreen(
-    navController: NavController
+    navController: NavController,
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
+    val changePasswordState by authViewModel.changePasswordState.collectAsState()
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -40,6 +45,27 @@ fun ChangePasswordScreen(
 
     var showSuccessDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Handle change password result
+    LaunchedEffect(changePasswordState) {
+        when (changePasswordState) {
+            is Resource.Success -> {
+                isLoading = false
+                showSuccessDialog = true
+                authViewModel.resetChangePasswordState()
+            }
+            is Resource.Error -> {
+                isLoading = false
+                errorMessage = (changePasswordState as Resource.Error).message
+                authViewModel.resetChangePasswordState()
+            }
+            is Resource.Loading -> {
+                isLoading = true
+            }
+            null -> {}
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -217,6 +243,23 @@ fun ChangePasswordScreen(
                 shape = MaterialTheme.shapes.medium
             )
 
+            // Error message from API
+            if (errorMessage != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // Change Password Button
@@ -250,11 +293,8 @@ fun ChangePasswordScreen(
                     }
 
                     if (!hasError) {
-                        isLoading = true
-                        // TODO: Implement actual password change with Firebase/backend
-                        // Simulate API call
-                        showSuccessDialog = true
-                        isLoading = false
+                        errorMessage = null
+                        authViewModel.changePassword(newPassword)
                     }
                 },
                 modifier = Modifier

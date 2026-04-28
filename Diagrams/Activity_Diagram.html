@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextGen Ecommerce - Activity Diagram</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            color: #333;
+            width: 1120px;
+            padding: 10px 18px 8px;
+            margin: 0 auto;
+        }
+        h1 { text-align: center; font-size: 14px; color: #1a5276; letter-spacing: 1px; font-weight: 800; margin-bottom: 1px; }
+        .subtitle { text-align: center; color: #777; font-size: 8px; margin-bottom: 6px; }
+
+        .canvas { position: relative; width: 1084px; height: 630px; }
+
+        svg.wires {
+            position: absolute; top: 0; left: 0;
+            width: 1084px; height: 630px;
+            z-index: 1; pointer-events: none;
+        }
+        .f { stroke-width: 1.4; fill: none; }
+        .fb { stroke: #5b7fbd; marker-end: url(#ab); }
+        .fy { stroke: #27ae60; marker-end: url(#ay); }
+        .fn { stroke: #c0392b; marker-end: url(#an); }
+        .fd { stroke: #999; stroke-dasharray: 4 2; marker-end: url(#ad); }
+
+        /* Nodes */
+        .n { position: absolute; z-index: 2; text-align: center; }
+
+        .start { width: 16px; height: 16px; border-radius: 50%; background: #1e8449; border: 2px solid #27ae60; }
+        .end { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 3px solid #c0392b; }
+        .end::after { content:''; position: absolute; top: 3px; left: 3px; width: 6px; height: 6px; border-radius: 50%; background: #c0392b; }
+
+        .act {
+            padding: 4px 8px; border-radius: 14px;
+            font-size: 6.8px; font-weight: 600; color: #333;
+            border: 1.5px solid #bbb; background: #f9f9f9;
+            min-width: 65px; line-height: 1.3;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .act .sub { font-size: 5.2px; color: #888; font-weight: 400; }
+
+        .dec {
+            width: 44px; height: 44px; transform: rotate(45deg);
+            background: #fff8e1; border: 1.5px solid #f0c040;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .dec span { transform: rotate(-45deg); font-size: 5.8px; font-weight: 700; color: #7d6608; white-space: nowrap; }
+
+        .fork { height: 4px; background: #555; border-radius: 2px; }
+
+        .cond { position: absolute; font-size: 5.5px; font-weight: 700; z-index: 3; padding: 0.5px 3px; border-radius: 2px; }
+        .cy { color: #1e8449; background: #eafaf1; }
+        .cn { color: #c0392b; background: #fdedec; }
+
+        /* Activity color accents */
+        .a-auth .act { border-left: 3px solid #2980b9; background: #eaf2f8; }
+        .a-home .act { border-left: 3px solid #27ae60; background: #eafaf1; }
+        .a-try .act { border-left: 3px solid #8e44ad; background: #f4ecf7; }
+        .a-cart .act { border-left: 3px solid #e67e22; background: #fef5e7; }
+        .a-ord .act { border-left: 3px solid #c0392b; background: #fdedec; }
+        .a-adm .act { border-left: 3px solid #16a085; background: #e8f8f5; }
+        .a-prof .act { border-left: 3px solid #2c3e50; background: #ebedef; }
+
+        /* Swimlane BG bands */
+        .band {
+            position: absolute; z-index: 0; border-radius: 6px; opacity: 0.35;
+        }
+
+        .footer {
+            display: flex; justify-content: center; align-items: center; gap: 12px;
+            margin-top: 2px; padding-top: 4px;
+            border-top: 1px solid #e0e0e0; flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 3px; font-size: 6.5px; color: #666; }
+        .ldot { width: 8px; height: 8px; border-radius: 2px; }
+
+        @media print {
+            body { background: #fff; }
+        }
+    </style>
+</head>
+<body>
+    <h1>ACTIVITY DIAGRAM</h1>
+    <p class="subtitle">NextGen Ecommerce &mdash; User Journey: Authentication &rarr; Browse Products &rarr; Virtual Try-On &rarr; Cart &amp; Checkout &rarr; Order Tracking</p>
+
+    <div class="canvas">
+
+        <!-- Background bands -->
+        <div class="band" style="top:0;left:0;width:300px;height:200px;background:#d6eaf8;"></div>
+        <div class="band" style="top:0;left:308px;width:250px;height:155px;background:#d5f5e3;"></div>
+        <div class="band" style="top:160px;left:308px;width:250px;height:290px;background:#e8daef;"></div>
+        <div class="band" style="top:160px;left:566px;width:240px;height:390px;background:#fdebd0;"></div>
+        <div class="band" style="top:370px;left:814px;width:268px;height:255px;background:#fadbd8;"></div>
+        <div class="band" style="top:0;left:566px;width:230px;height:155px;background:#ebedef;"></div>
+        <div class="band" style="top:0;left:814px;width:268px;height:360px;background:#d1f2eb;"></div>
+
+        <!-- Band labels -->
+        <div style="position:absolute;top:2px;left:5px;font-size:6px;color:#2471a3;font-weight:700;z-index:1;">AUTHENTICATION</div>
+        <div style="position:absolute;top:2px;left:313px;font-size:6px;color:#1e8449;font-weight:700;z-index:1;">HOME / BROWSE</div>
+        <div style="position:absolute;top:162px;left:313px;font-size:6px;color:#6c3483;font-weight:700;z-index:1;">VIRTUAL TRY-ON</div>
+        <div style="position:absolute;top:162px;left:571px;font-size:6px;color:#ca6f1e;font-weight:700;z-index:1;">CART & CHECKOUT</div>
+        <div style="position:absolute;top:372px;left:819px;font-size:6px;color:#922b21;font-weight:700;z-index:1;">ORDER & REVIEW</div>
+        <div style="position:absolute;top:2px;left:571px;font-size:6px;color:#2c3e50;font-weight:700;z-index:1;">PROFILE</div>
+        <div style="position:absolute;top:2px;left:819px;font-size:6px;color:#117a65;font-weight:700;z-index:1;">ADMIN</div>
+
+        <!--
+            COORDINATE MAP (center points for connections):
+            ================================================================
+            AUTH:
+              Start:          (30, 18)
+              Splash:         (55, 30)    → bottom (55, 42)
+              D:LoggedIn:     (55, 65)    → right=77, bottom=87, left=33
+              Login:          (55, 105)   → bottom (55, 117)
+              D:HasAcct:      (55, 138)   → right=77, bottom=160
+              Register:       (55, 178)   → bottom (55, 190)
+              EmailConfirm:   (160, 178)  → right (195, 178)
+              SupabaseAuth:   (160, 105)  → bottom (160, 120)
+              D:Google:       (160, 140)  → right=182, bottom=162
+              GoogleOAuth:    (250, 105)
+              EmailPassAuth:  (250, 155)
+              SessionCreated: (250, 60)   → right to Home
+
+            HOME:
+              Home:           (385, 30)   → bottom (385, 48)
+              Fork:           (385, 58)   bar from 330 to 440
+              BrowseProducts: (340, 78)   → bottom (340, 95)
+              Search:         (430, 78)   → bottom (430, 95)
+              ProductList:    (385, 112)  → bottom (385, 128)
+              ProductDetail:  (385, 142)  → bottom (385, 155)
+
+            TRY-ON:
+              D:TryOn:        (385, 180)  → bottom=202, right=407
+              SelectAvatar:   (360, 225)
+              UploadImage:    (360, 262)
+              CallRapidAPI:   (360, 300)
+              ViewResult:     (360, 340)
+              LiveAR:         (480, 225)
+              D:AddToCart:    (385, 382)  → right=407
+
+            CART:
+              AddToCart:      (630, 195)
+              ViewCart:       (630, 235)
+              D:EditQty:      (630, 272)  → right=652, bottom=294
+              UpdateQty:      (720, 252)
+              Checkout:       (630, 315)
+              Address:        (630, 352)
+              Payment:        (630, 390)
+              PlaceOrder:     (630, 430)
+
+            ORDER:
+              Confirmed:      (880, 395)
+              Track:          (880, 435)
+              D:Delivered:    (880, 475)
+              Review:         (960, 510)
+              Notification:   (880, 520)
+              End:            (960, 560)
+
+            PROFILE:
+              ViewProfile:    (630, 30)
+              EditProfile:    (630, 62)
+              ManageAddr:     (630, 94)
+              ViewOrders:     (630, 126)
+              Wishlist:       (720, 126)
+
+            ADMIN:
+              AdminCheck:     (880, 30)
+              D:IsAdmin:      (880, 65)
+              Dashboard:      (880, 105)
+              ManageProds:    (880, 140)
+              AddProduct:     (880, 172)
+              UpdateProduct:  (960, 140)
+              DeleteProduct:  (960, 172)
+        -->
+
+        <!-- ======== SVG ARROWS ======== -->
+        <svg class="wires" viewBox="0 0 1084 630">
+            <defs>
+                <marker id="ab" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#5b7fbd"/></marker>
+                <marker id="ay" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#27ae60"/></marker>
+                <marker id="an" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#c0392b"/></marker>
+                <marker id="ad" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#999"/></marker>
+            </defs>
+
+            <!-- AUTH FLOW -->
+            <!-- Start → Splash -->
+            <line class="f fb" x1="30" y1="26" x2="30" y2="32" />
+            <!-- Splash → D:LoggedIn -->
+            <line class="f fb" x1="55" y1="46" x2="55" y2="50" />
+            <!-- D:LoggedIn YES → right → SupabaseAuth -->
+            <path class="f fy" d="M 77 65 L 115 65 L 115 105 L 125 105" />
+            <!-- D:LoggedIn NO → down → Login -->
+            <line class="f fn" x1="55" y1="87" x2="55" y2="95" />
+            <!-- Login → D:HasAcct -->
+            <line class="f fb" x1="55" y1="117" x2="55" y2="122" />
+            <!-- D:HasAcct YES → right → SupabaseAuth -->
+            <path class="f fy" d="M 77 138 L 115 138 L 115 115 L 125 115" />
+            <!-- D:HasAcct NO → down → Register -->
+            <line class="f fn" x1="55" y1="160" x2="55" y2="168" />
+            <!-- Register → EmailConfirm -->
+            <path class="f fb" d="M 90 178 L 125 178" />
+            <!-- EmailConfirm → SupabaseAuth (up) -->
+            <path class="f fb" d="M 160 168 L 160 120" />
+            <!-- SupabaseAuth → D:Google -->
+            <line class="f fb" x1="160" y1="120" x2="160" y2="125" />
+            <!-- D:Google YES → GoogleOAuth -->
+            <path class="f fy" d="M 182 140 L 215 140 L 215 105 L 225 105" />
+            <!-- D:Google NO → EmailPassAuth -->
+            <path class="f fn" d="M 160 162 L 160 170 L 215 170 L 215 155 L 225 155" />
+            <!-- GoogleOAuth → SessionCreated -->
+            <path class="f fb" d="M 275 105 L 275 60 L 290 60" />
+            <!-- EmailPassAuth → SessionCreated -->
+            <path class="f fb" d="M 275 155 L 290 155 L 290 70 L 290 60" />
+            <!-- SessionCreated → Home -->
+            <path class="f fb" d="M 330 60 L 340 60 L 340 30 L 348 30" />
+
+            <!-- HOME FLOW -->
+            <!-- Home → Fork -->
+            <line class="f fb" x1="385" y1="48" x2="385" y2="55" />
+            <!-- Fork → BrowseProducts -->
+            <path class="f fb" d="M 345 58 L 345 68" />
+            <!-- Fork → Search -->
+            <path class="f fb" d="M 425 58 L 425 68" />
+            <!-- Fork → ViewProfile (right) -->
+            <path class="f fd" d="M 450 58 L 580 58 L 580 22" />
+            <!-- Fork → Admin (far right) -->
+            <path class="f fd" d="M 450 58 L 835 58 L 835 22" />
+            <!-- BrowseProducts → ProductList -->
+            <path class="f fb" d="M 345 95 L 345 104 L 370 104" />
+            <!-- Search → ProductList -->
+            <path class="f fb" d="M 425 95 L 425 104 L 400 104" />
+            <!-- ProductList → ProductDetail -->
+            <line class="f fb" x1="385" y1="120" x2="385" y2="130" />
+            <!-- ProductDetail → D:TryOn -->
+            <line class="f fb" x1="385" y1="155" x2="385" y2="163" />
+
+            <!-- TRY-ON FLOW -->
+            <!-- D:TryOn YES → down → SelectAvatar -->
+            <line class="f fy" x1="385" y1="202" x2="385" y2="215" />
+            <!-- D:TryOn NO → right → D:AddToCart -->
+            <path class="f fn" d="M 407 180 L 510 180 L 510 382 L 530 382" />
+            <!-- SelectAvatar → UploadImage -->
+            <line class="f fb" x1="385" y1="240" x2="385" y2="252" />
+            <!-- UploadImage → CallRapidAPI -->
+            <line class="f fb" x1="385" y1="275" x2="385" y2="288" />
+            <!-- CallRapidAPI → ViewResult -->
+            <line class="f fb" x1="385" y1="315" x2="385" y2="328" />
+            <!-- ViewResult → D:AddToCart -->
+            <path class="f fb" d="M 385 355 L 385 370 L 540 370 L 540 382 L 530 382" />
+            <!-- SelectAvatar → LiveAR (alt branch right) -->
+            <path class="f fd" d="M 420 225 L 445 225" />
+            <!-- LiveAR → ViewResult merge -->
+            <path class="f fd" d="M 480 240 L 480 345 L 410 345" />
+
+            <!-- D:AddToCart YES → right → AddToCart -->
+            <path class="f fy" d="M 573 382 L 595 382 L 595 195 L 605 195" />
+            <!-- D:AddToCart NO → back to ProductDetail -->
+            <path class="f fn" d="M 550 360 L 510 320 L 440 155 L 410 155" />
+
+            <!-- CART FLOW -->
+            <!-- AddToCart → ViewCart -->
+            <line class="f fb" x1="645" y1="210" x2="645" y2="225" />
+            <!-- ViewCart → D:EditQty -->
+            <line class="f fb" x1="645" y1="250" x2="645" y2="257" />
+            <!-- D:EditQty YES → UpdateQty → back to ViewCart -->
+            <path class="f fy" d="M 667 272 L 700 272 L 700 240 L 670 240" />
+            <!-- D:EditQty NO → Checkout -->
+            <line class="f fn" x1="645" y1="294" x2="645" y2="305" />
+            <!-- Checkout → Address -->
+            <line class="f fb" x1="645" y1="328" x2="645" y2="342" />
+            <!-- Address → Payment -->
+            <line class="f fb" x1="645" y1="365" x2="645" y2="380" />
+            <!-- Payment → PlaceOrder -->
+            <line class="f fb" x1="645" y1="405" x2="645" y2="420" />
+            <!-- PlaceOrder → right to Confirmed -->
+            <path class="f fb" d="M 690 435 L 840 435 L 840 400" />
+
+            <!-- ORDER FLOW -->
+            <!-- Confirmed → Track -->
+            <line class="f fb" x1="880" y1="410" x2="880" y2="425" />
+            <!-- Track → D:Delivered -->
+            <line class="f fb" x1="880" y1="450" x2="880" y2="460" />
+            <!-- D:Delivered YES → Review -->
+            <path class="f fy" d="M 902 480 L 928 480 L 928 510 L 935 510" />
+            <!-- D:Delivered NO → Notification → back to Track -->
+            <path class="f fn" d="M 880 502 L 880 520 L 920 520 L 920 445 L 900 445" />
+            <!-- Review → End -->
+            <line class="f fb" x1="970" y1="525" x2="970" y2="550" />
+
+            <!-- PROFILE FLOW -->
+            <line class="f fb" x1="630" y1="44" x2="630" y2="52" />
+            <line class="f fb" x1="630" y1="75" x2="630" y2="84" />
+            <line class="f fb" x1="630" y1="108" x2="630" y2="116" />
+            <path class="f fb" d="M 665 126 L 695 126" />
+            <!-- Wishlist → back to Browse (dashed) -->
+            <path class="f fd" d="M 720 140 L 720 155 L 455 155 L 455 112 L 410 112" />
+
+            <!-- ADMIN FLOW -->
+            <line class="f fb" x1="880" y1="42" x2="880" y2="50" />
+            <!-- D:IsAdmin YES → Dashboard -->
+            <line class="f fy" x1="880" y1="87" x2="880" y2="95" />
+            <!-- Dashboard → ManageProds -->
+            <line class="f fb" x1="880" y1="118" x2="880" y2="130" />
+            <!-- ManageProds → AddProduct -->
+            <line class="f fb" x1="880" y1="155" x2="880" y2="162" />
+            <!-- ManageProds → UpdateProduct (right branch) -->
+            <path class="f fb" d="M 920 140 L 935 140" />
+            <!-- ManageProds → DeleteProduct (right branch) -->
+            <path class="f fb" d="M 920 150 L 960 150 L 960 162" />
+
+        </svg>
+
+        <!-- ================================================================ -->
+        <!--                            NODES                                 -->
+        <!-- ================================================================ -->
+
+        <!-- ===== AUTH ===== -->
+        <div class="n" style="top:10px; left:22px;"><div class="start"></div></div>
+
+        <div class="n a-auth" style="top:32px; left:18px;"><div class="act">Splash Screen</div></div>
+
+        <div class="n" style="top:48px; left:33px;"><div class="dec"><span>Logged<br>In?</span></div></div>
+        <div class="cond cy" style="top:55px; left:82px;">Yes</div>
+        <div class="cond cn" style="top:88px; left:42px;">No</div>
+
+        <div class="n a-auth" style="top:95px; left:18px;"><div class="act">Login Screen</div></div>
+
+        <div class="n" style="top:120px; left:33px;"><div class="dec"><span>Has<br>Acct?</span></div></div>
+        <div class="cond cy" style="top:128px; left:82px;">Yes</div>
+        <div class="cond cn" style="top:162px; left:42px;">No</div>
+
+        <div class="n a-auth" style="top:168px; left:18px;"><div class="act">Register User</div></div>
+
+        <div class="n a-auth" style="top:168px; left:125px;"><div class="act">Email Confirm</div></div>
+
+        <div class="n a-auth" style="top:95px; left:125px;"><div class="act">Supabase Auth<div class="sub">JWT Session</div></div></div>
+
+        <div class="n" style="top:123px; left:138px;"><div class="dec"><span>Google<br>Sign?</span></div></div>
+        <div class="cond cy" style="top:130px; left:188px;">Yes</div>
+        <div class="cond cn" style="top:164px; left:148px;">No</div>
+
+        <div class="n a-auth" style="top:95px; left:225px;"><div class="act">Google OAuth<div class="sub">OAuth 2.0</div></div></div>
+
+        <div class="n a-auth" style="top:145px; left:225px;"><div class="act">Email/Pass Auth</div></div>
+
+        <div class="n a-auth" style="top:50px; left:290px;"><div class="act">Session Created<div class="sub">Token Stored</div></div></div>
+
+        <!-- ===== HOME / BROWSE ===== -->
+        <div class="n a-home" style="top:18px; left:348px;"><div class="act">Home Screen<div class="sub">Featured / Categories</div></div></div>
+
+        <div class="n" style="top:55px; left:330px;"><div class="fork" style="width:130px;"></div></div>
+
+        <div class="n a-home" style="top:68px; left:313px;"><div class="act">Browse<br>Products</div></div>
+
+        <div class="n a-home" style="top:68px; left:398px;"><div class="act">Search &<br>Filter</div></div>
+
+        <div class="n a-home" style="top:100px; left:348px;"><div class="act">Product List<div class="sub">Grid View + Pagination</div></div></div>
+
+        <div class="n a-home" style="top:130px; left:343px;"><div class="act">Product Detail<div class="sub">Images, Price, Sizes, Reviews</div></div></div>
+
+        <!-- ===== TRY-ON ===== -->
+        <div class="n" style="top:161px; left:363px;"><div class="dec"><span>Try<br>On?</span></div></div>
+        <div class="cond cy" style="top:204px; left:373px;">Yes</div>
+        <div class="cond cn" style="top:170px; left:412px;">No</div>
+
+        <div class="n a-try" style="top:215px; left:345px;"><div class="act">Select Avatar<div class="sub">Profile / Upload / Camera</div></div></div>
+
+        <div class="n a-try" style="top:252px; left:350px;"><div class="act">Upload Image<div class="sub">Base64 Processing</div></div></div>
+
+        <div class="n a-try" style="top:290px; left:340px;"><div class="act">Call RapidAPI<div class="sub">Try-On Diffusion</div></div></div>
+
+        <div class="n a-try" style="top:328px; left:345px;"><div class="act">View Try-On Result<div class="sub">Generated Image</div></div></div>
+
+        <div class="n a-try" style="top:215px; left:445px;"><div class="act">Live AR Try-On<div class="sub">Snap Camera Kit</div></div></div>
+
+        <!-- D:AddToCart -->
+        <div class="n" style="top:365px; left:528px;"><div class="dec"><span>Add to<br>Cart?</span></div></div>
+        <div class="cond cy" style="top:372px; left:578px;">Yes</div>
+        <div class="cond cn" style="top:352px; left:538px;">No</div>
+
+        <!-- ===== CART ===== -->
+        <div class="n a-cart" style="top:185px; left:605px;"><div class="act">Add Item to Cart<div class="sub">Size, Color, Qty</div></div></div>
+
+        <div class="n a-cart" style="top:225px; left:608px;"><div class="act">View Cart<div class="sub">Items & Totals</div></div></div>
+
+        <div class="n" style="top:255px; left:623px;"><div class="dec"><span>Edit<br>Qty?</span></div></div>
+        <div class="cond cy" style="top:262px; left:672px;">Yes</div>
+        <div class="cond cn" style="top:296px; left:633px;">No</div>
+
+        <div class="n a-cart" style="top:305px; left:605px;"><div class="act">Checkout Screen<div class="sub">Order Summary</div></div></div>
+
+        <div class="n a-cart" style="top:342px; left:602px;"><div class="act">Enter Shipping<br>Address</div></div>
+
+        <div class="n a-cart" style="top:380px; left:602px;"><div class="act">Select Payment<br>Method</div></div>
+
+        <div class="n a-cart" style="top:420px; left:605px;"><div class="act">Place Order<div class="sub">Save to Supabase</div></div></div>
+
+        <!-- ===== ORDER ===== -->
+        <div class="n a-ord" style="top:385px; left:840px;"><div class="act">Order Confirmed<div class="sub">Notification Sent</div></div></div>
+
+        <div class="n a-ord" style="top:425px; left:840px;"><div class="act">Track Order<div class="sub">Status Updates</div></div></div>
+
+        <div class="n" style="top:458px; left:858px;"><div class="dec"><span>Deliv<br>ered?</span></div></div>
+        <div class="cond cy" style="top:472px; left:907px;">Yes</div>
+        <div class="cond cn" style="top:504px; left:868px;">No</div>
+
+        <div class="n a-ord" style="top:502px; left:935px;"><div class="act">Rate & Review<div class="sub">Submit Rating</div></div></div>
+
+        <div class="n" style="top:550px; left:962px;"><div class="end"></div></div>
+
+        <!-- ===== PROFILE ===== -->
+        <div class="n a-prof" style="top:20px; left:580px;"><div class="act">View Profile</div></div>
+        <div class="n a-prof" style="top:55px; left:582px;"><div class="act">Edit Profile<div class="sub">Image Upload</div></div></div>
+        <div class="n a-prof" style="top:88px; left:580px;"><div class="act">Manage Addresses</div></div>
+        <div class="n a-prof" style="top:118px; left:590px;"><div class="act">View Orders</div></div>
+        <div class="n a-prof" style="top:118px; left:695px;"><div class="act">Wishlist</div></div>
+
+        <!-- ===== ADMIN ===== -->
+        <div class="n a-adm" style="top:20px; left:835px;"><div class="act">Admin Check<div class="sub">Verify Role</div></div></div>
+
+        <div class="n" style="top:48px; left:858px;"><div class="dec"><span>Is<br>Admin?</span></div></div>
+        <div class="cond cy" style="top:88px; left:868px;">Yes</div>
+
+        <div class="n a-adm" style="top:95px; left:838px;"><div class="act">Admin Dashboard<div class="sub">Analytics Overview</div></div></div>
+
+        <div class="n a-adm" style="top:132px; left:840px;"><div class="act">Manage Products</div></div>
+
+        <div class="n a-adm" style="top:162px; left:840px;"><div class="act">Add Product<div class="sub">Images & Details</div></div></div>
+
+        <div class="n a-adm" style="top:130px; left:935px;"><div class="act">Update Product</div></div>
+
+        <div class="n a-adm" style="top:162px; left:935px;"><div class="act">Delete Product</div></div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="legend-item"><div class="ldot" style="background:#1e8449;border-radius:50%;width:8px;height:8px;"></div>Start</div>
+        <div class="legend-item"><div class="ldot" style="background:#fff;border:2px solid #c0392b;border-radius:50%;width:8px;height:8px;"></div>End</div>
+        <div class="legend-item"><div class="ldot" style="background:#f5f5f5;border:1px solid #aaa;border-radius:8px;"></div>Activity</div>
+        <div class="legend-item"><div class="ldot" style="background:#fff8e1;border:1px solid #f0c040;transform:rotate(45deg);border-radius:1px;width:6px;height:6px;"></div>Decision</div>
+        <div class="legend-item"><div style="width:14px;height:3px;background:#555;border-radius:1px;"></div>Fork</div>
+        <span style="color:#ccc;">|</span>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #2980b9;background:transparent;border-radius:0;"></div>Authentication</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #27ae60;background:transparent;border-radius:0;"></div>Home / Browse</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #8e44ad;background:transparent;border-radius:0;"></div>Virtual Try-On</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #e67e22;background:transparent;border-radius:0;"></div>Cart & Checkout</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #c0392b;background:transparent;border-radius:0;"></div>Order & Review</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #2c3e50;background:transparent;border-radius:0;"></div>Profile</div>
+        <div class="legend-item"><div class="ldot" style="border-left:3px solid #16a085;background:transparent;border-radius:0;"></div>Admin</div>
+    </div>
+</body>
+</html>

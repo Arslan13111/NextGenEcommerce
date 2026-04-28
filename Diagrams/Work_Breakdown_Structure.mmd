@@ -1,0 +1,204 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4A90D9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2E6BA6', 'lineColor': '#5B5B5B', 'secondaryColor': '#F39C12', 'tertiaryColor': '#2ECC71', 'fontSize': '14px'}}}%%
+
+mindmap
+  root((NextGen Ecommerce<br/>Project))
+
+    **1. Project Management**
+      1.1 Planning & Analysis
+        1.1.1 Requirements Gathering
+        1.1.2 Technology Selection
+        1.1.3 Architecture Design
+        1.1.4 Database Schema Design
+        1.1.5 API Contract Definition
+      1.2 Project Setup
+        1.2.1 Repository Initialization
+        1.2.2 Android Project Setup
+        1.2.3 Backend Project Setup
+        1.2.4 Supabase Cloud Setup
+        1.2.5 CI/CD Configuration
+      1.3 Testing & QA
+        1.3.1 Unit Testing
+        1.3.2 Integration Testing
+        1.3.3 UI/UX Testing
+        1.3.4 API Testing
+        1.3.5 Performance Testing
+      1.4 Deployment
+        1.4.1 Backend Deployment
+        1.4.2 Database Migration
+        1.4.3 App Store Preparation
+        1.4.4 Release & Monitoring
+
+    **2. Android Frontend**
+      2.1 App Foundation
+        2.1.1 Kotlin + Jetpack Compose Setup
+        2.1.2 Hilt Dependency Injection
+        2.1.3 Navigation Graph Setup
+        2.1.4 Material3 Theme System
+        2.1.5 Room Database Config
+      2.2 Authentication Module
+        2.2.1 Splash Screen
+        2.2.2 Login Screen
+        2.2.3 Register Screen
+        2.2.4 Google Sign-In
+        2.2.5 Email Confirmation
+        2.2.6 Session Management
+      2.3 Product Module
+        2.3.1 Home Screen
+        2.3.2 Product List Screen
+        2.3.3 Product Detail Screen
+        2.3.4 Search Screen
+        2.3.5 Category Filtering
+        2.3.6 Product Card Component
+        2.3.7 Image Carousel Component
+      2.4 Cart & Checkout Module
+        2.4.1 Cart Screen
+        2.4.2 Cart Item Card Component
+        2.4.3 Checkout Screen
+        2.4.4 Address Selection
+        2.4.5 Payment Method Selection
+        2.4.6 Order Confirmation
+      2.5 Order Management Module
+        2.5.1 Orders List Screen
+        2.5.2 Order Detail Screen
+        2.5.3 Order Status Tracking
+        2.5.4 Delivery Estimation
+      2.6 Virtual Try-On Module
+        2.6.1 Try-On Screen
+        2.6.2 Avatar Image Selection
+        2.6.3 Camera Capture
+        2.6.4 Try-On Result Display
+        2.6.5 Live AR Try-On Activity
+        2.6.6 Snap Camera Kit Integration
+      2.7 User Profile Module
+        2.7.1 Profile Screen
+        2.7.2 Profile Image Upload
+        2.7.3 Settings Screen
+        2.7.4 Change Password Screen
+        2.7.5 Manage Addresses Screen
+        2.7.6 Help Center Screen
+        2.7.7 About Screen
+      2.8 Wishlist & Notifications
+        2.8.1 Wishlist Screen
+        2.8.2 Notification Screen
+        2.8.3 Notification Helper
+      2.9 Admin Module
+        2.9.1 Admin Login Screen
+        2.9.2 Admin Dashboard Screen
+        2.9.3 Add Product Screen
+      2.10 Data Layer
+        2.10.1 AuthRepository
+        2.10.2 ProductRepository
+        2.10.3 CartRepository
+        2.10.4 OrderRepository
+        2.10.5 WishlistRepository
+        2.10.6 NotificationRepository
+        2.10.7 StorageRepository
+        2.10.8 TryOnRepository
+      2.11 ViewModels
+        2.11.1 AuthViewModel
+        2.11.2 ProductViewModel
+        2.11.3 CartViewModel
+        2.11.4 OrderViewModel
+        2.11.5 WishlistViewModel
+        2.11.6 NotificationViewModel
+        2.11.7 ThemeViewModel
+        2.11.8 TryOnViewModel
+
+    **3. Node.js Backend**
+      3.1 Server Foundation
+        3.1.1 Express.js Setup
+        3.1.2 CORS Configuration
+        3.1.3 Body Parser Middleware
+        3.1.4 Supabase Client Init
+        3.1.5 Health Check Endpoint
+      3.2 Auth API
+        3.2.1 POST /auth/register
+        3.2.2 POST /auth/login
+        3.2.3 POST /auth/google-login
+        3.2.4 GET /auth/confirm
+      3.3 Products API
+        3.3.1 GET /products
+        3.3.2 GET /products/:id
+        3.3.3 GET /products/search
+        3.3.4 GET /products/featured
+      3.4 Orders API
+        3.4.1 POST /orders
+        3.4.2 GET /orders/:id
+        3.4.3 GET /orders/user/:userId
+        3.4.4 PUT /orders/:id/status
+      3.5 Reviews API
+        3.5.1 POST /reviews
+        3.5.2 GET /reviews/product/:id
+      3.6 User API
+        3.6.1 GET /users/:id
+        3.6.2 PUT /users/:id
+      3.7 Admin API
+        3.7.1 POST /admin/products
+        3.7.2 PUT /admin/products/:id
+        3.7.3 DELETE /admin/products/:id
+      3.8 Virtual Try-On API
+        3.8.1 POST /api/try-on-diffusion
+        3.8.2 RapidAPI Try-On Diffusion Integration
+        3.8.3 Image Base64 Processing
+        3.8.4 Response Processing
+      3.9 Utility Scripts
+        3.9.1 add-product.js
+        3.9.2 Bulk Upload Scripts
+
+    **4. Database & Cloud**
+      4.1 Supabase PostgreSQL
+        4.1.1 Users Table
+        4.1.2 Products Table
+        4.1.3 Cart Items Table
+        4.1.4 Orders Table
+        4.1.5 Reviews Table
+      4.2 Room Local Database
+        4.2.1 Product Entity & DAO
+        4.2.2 Cart Entity & DAO
+        4.2.3 Order Entity & DAO
+        4.2.4 Wishlist Entity & DAO
+        4.2.5 Notification Entity & DAO
+        4.2.6 User Entity & DAO
+        4.2.7 Type Converters
+      4.3 Supabase Auth
+        4.3.1 Email/Password Auth
+        4.3.2 OAuth Google Provider
+        4.3.3 JWT Token Management
+        4.3.4 Session Handling
+      4.4 Supabase Storage
+        4.4.1 Profiles Bucket
+        4.4.2 Product Images Bucket
+        4.4.3 Storage Policies
+      4.5 Row Level Security
+        4.5.1 Users RLS Policies
+        4.5.2 Products RLS Policies
+        4.5.3 Cart Items RLS Policies
+        4.5.4 Admin RLS Policies
+        4.5.5 Try-On RLS Policies
+        4.5.6 Storage Access Policies
+
+    **5. AI & AR Integration**
+      5.1 Try-On Diffusion (RapidAPI)
+        5.1.1 File Upload Try-On
+        5.1.2 URL-Based Try-On
+        5.1.3 Avatar Sex Parameter
+        5.1.4 Clothing Prompt Support
+        5.1.5 Response Processing
+      5.2 AR Try-On (Snap Camera Kit)
+        5.2.1 ARCore Setup
+        5.2.2 Sceneform 3D Rendering
+        5.2.3 Camera Feed Processing
+        5.2.4 Lens Application
+        5.2.5 JWT Token Auth
+      5.3 Image Processing
+        5.3.1 Image Compression
+        5.3.2 Base64 Encoding/Decoding
+        5.3.3 Format Conversion
+        5.3.4 Size Optimization
+        5.3.5 Multi-format Support
+
+    **6. Email Confirmation Page**
+      6.1 HTML Landing Page
+        6.1.1 Confirmation UI Design
+        6.1.2 Success/Error States
+        6.1.3 Redirect Logic

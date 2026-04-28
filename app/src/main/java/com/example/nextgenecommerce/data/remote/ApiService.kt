@@ -142,7 +142,9 @@ data class CreateOrderRequest(
     val userId: String,
     val items: List<OrderItem>,
     val shippingAddress: Address,
-    val paymentMethod: String
+    val paymentMethod: String,
+    val discountAmount: Double = 0.0,
+    val cardTier: String = "SILVER"
 )
 
 data class OrderResponse(

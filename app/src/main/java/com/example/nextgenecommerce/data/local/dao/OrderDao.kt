@@ -13,6 +13,9 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE id = :orderId")
     fun getOrderById(orderId: String): Flow<Order?>
 
+    @Query("SELECT * FROM orders WHERE id = :orderId LIMIT 1")
+    suspend fun getOrderByIdOnce(orderId: String): Order?
+
     @Query("SELECT * FROM orders WHERE userId = :userId ORDER BY createdAt DESC")
     fun getOrdersByUserId(userId: String): Flow<List<Order>>
 

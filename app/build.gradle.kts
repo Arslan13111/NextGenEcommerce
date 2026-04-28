@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
-    id("com.google.gms.google-services")
+    kotlin("plugin.serialization") version "1.9.20"
 }
 
 android {
@@ -26,7 +26,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -92,15 +93,24 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-messaging")
-    implementation("com.google.firebase:firebase-analytics")
+    // Supabase
+    val supabaseVersion = "2.0.4"
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:$supabaseVersion")
+    implementation("io.github.jan-tennert.supabase:gotrue-kt:$supabaseVersion")
+    implementation("io.github.jan-tennert.supabase:storage-kt:$supabaseVersion")
+    implementation("io.github.jan-tennert.supabase:realtime-kt:$supabaseVersion")
 
-    // Google Play Services
+    // Ktor Client for Supabase
+    val ktorVersion = "2.3.7"
+    implementation("io.ktor:ktor-client-android:$ktorVersion")
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-utils:$ktorVersion")
+    implementation("io.ktor:ktor-client-logging:$ktorVersion")
+
+    // Kotlin Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+
+    // Google Play Services (for Google Sign-In with Supabase)
     implementation("com.google.android.gms:play-services-auth:20.7.0")
 
     // ARCore
@@ -137,7 +147,6 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
@@ -173,6 +182,11 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+
+    // Snap Camera Kit for Live AR Try-On
+    val cameraKitVersion = "1.46.0"
+    implementation("com.snap.camerakit:camerakit:$cameraKitVersion")
+    implementation("com.snap.camerakit:support-camerax:$cameraKitVersion")
 
     // Image Processing
     implementation("androidx.exifinterface:exifinterface:1.3.7")

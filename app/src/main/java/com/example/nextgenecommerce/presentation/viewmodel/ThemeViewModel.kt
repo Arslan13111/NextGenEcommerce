@@ -22,6 +22,13 @@ class ThemeViewModel @Inject constructor(
             initialValue = false
         )
 
+    val useSystemTheme: StateFlow<Boolean> = preferencesManager.useSystemTheme
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val notificationsEnabled: StateFlow<Boolean> = preferencesManager.notificationsEnabled
         .stateIn(
             scope = viewModelScope,
@@ -32,6 +39,12 @@ class ThemeViewModel @Inject constructor(
     fun toggleDarkMode(enabled: Boolean) {
         viewModelScope.launch {
             preferencesManager.setDarkMode(enabled)
+        }
+    }
+
+    fun toggleUseSystemTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setUseSystemTheme(enabled)
         }
     }
 

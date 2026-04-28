@@ -177,23 +177,3 @@ enum class ImageSource {
     ASSETS,
     FILE
 }
-
-/**
- * API configuration constants
- */
-object TryOnConstants {
-    const val API_TIMEOUT_SECONDS = 90L
-    const val MAX_IMAGE_SIZE_MB = 10
-    const val TARGET_IMAGE_SIZE_MB = 2
-    const val MAX_IMAGE_DIMENSION = 2048
-
-    // Supported image formats
-    val SUPPORTED_FORMATS = listOf("image/jpeg", "image/png", "image/webp")
-
-    // API field names (must match API documentation)
-    const val FIELD_CLOTHING_IMAGE = "clothing_image"
-    const val FIELD_AVATAR_IMAGE = "avatar_image"
-    const val FIELD_CLOTHING_PROMPT = "clothing_prompt"
-    const val FIELD_AVATAR_SEX = "avatar_sex"
-    const val FIELD_AVATAR_PROMPT = "avatar_prompt"
-}

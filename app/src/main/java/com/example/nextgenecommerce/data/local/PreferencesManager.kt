@@ -16,6 +16,7 @@ class PreferencesManager(private val context: Context) {
 
     companion object {
         val DARK_MODE_KEY = booleanPreferencesKey("dark_mode")
+        val USE_SYSTEM_THEME_KEY = booleanPreferencesKey("use_system_theme")
         val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
         val USER_ID_KEY = stringPreferencesKey("user_id")
         val IS_LOGGED_IN_KEY = booleanPreferencesKey("is_logged_in")
@@ -23,6 +24,10 @@ class PreferencesManager(private val context: Context) {
 
     val darkMode: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[DARK_MODE_KEY] ?: false
+    }
+
+    val useSystemTheme: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[USE_SYSTEM_THEME_KEY] ?: true
     }
 
     val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -36,6 +41,12 @@ class PreferencesManager(private val context: Context) {
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[DARK_MODE_KEY] = enabled
+        }
+    }
+
+    suspend fun setUseSystemTheme(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USE_SYSTEM_THEME_KEY] = enabled
         }
     }
 
