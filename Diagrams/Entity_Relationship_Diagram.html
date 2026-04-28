@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextGen Ecommerce - Entity Relationship Diagram</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0B0B1A;
+            color: #e0e0e0;
+            width: 1120px;
+            padding: 12px 18px 10px;
+            margin: 0 auto;
+        }
+        h1 { text-align: center; font-size: 15px; color: #00BFFF; letter-spacing: 1.5px; font-weight: 800; margin-bottom: 1px; }
+        .subtitle { text-align: center; color: #7a7a8a; font-size: 8px; margin-bottom: 8px; }
+
+        .er-canvas {
+            position: relative;
+            width: 1084px;
+            height: 600px;
+        }
+
+        /* Entity */
+        .entity {
+            position: absolute;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+            z-index: 2;
+        }
+        .entity-header {
+            padding: 4px 8px;
+            font-size: 7.5px;
+            font-weight: 800;
+            color: #fff;
+            text-align: center;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .entity-body { background: #13132a; padding: 3px 0; }
+        .attr {
+            display: flex;
+            align-items: center;
+            padding: 1.5px 7px;
+            font-size: 6.2px;
+            gap: 3px;
+        }
+        .attr-name { color: #c0c0d0; flex: 1; }
+        .attr-type { color: #556; font-size: 5.5px; font-family: Consolas, monospace; }
+        .attr-key {
+            font-size: 4.8px;
+            padding: 0.5px 2.5px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+        .pk { background: rgba(243,156,18,0.25); color: #f1c40f; }
+        .fk { background: rgba(52,152,219,0.25); color: #5dade2; }
+        .nn { background: rgba(46,204,113,0.15); color: #58d68d; }
+        .divider { height: 1px; background: rgba(255,255,255,0.07); margin: 1.5px 0; }
+
+        .e-users .entity-header { background: linear-gradient(135deg, #2471a3, #2e86c1); }
+        .e-products .entity-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
+        .e-cart .entity-header { background: linear-gradient(135deg, #ca6f1e, #e67e22); }
+        .e-orders .entity-header { background: linear-gradient(135deg, #a93226, #cb4335); }
+        .e-reviews .entity-header { background: linear-gradient(135deg, #76448a, #8e44ad); }
+        .e-wishlist .entity-header { background: linear-gradient(135deg, #117a65, #16a085); }
+        .e-notifications .entity-header { background: linear-gradient(135deg, #2c3e50, #34495e); }
+        .e-enum .entity-header { background: linear-gradient(135deg, #5d6d7e, #7f8c8d); font-size: 6.5px; }
+        .e-enum .entity-body { padding: 3px 7px; }
+        .e-enum .attr { font-size: 5.8px; padding: 1px 0; }
+
+        /* SVG */
+        svg.wires {
+            position: absolute;
+            top: 0; left: 0;
+            width: 1084px;
+            height: 600px;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .wire { stroke-width: 1.3; fill: none; }
+        .wire-solid { stroke: rgba(102,126,234,0.35); }
+        .wire-dash { stroke: rgba(102,126,234,0.25); stroke-dasharray: 4 2; }
+
+        /* Relationship label on wire */
+        .rlabel {
+            position: absolute;
+            font-size: 5.5px;
+            color: #667eea;
+            background: #0e0e20;
+            padding: 1px 4px;
+            border-radius: 2px;
+            border: 1px solid rgba(102,126,234,0.2);
+            font-weight: 600;
+            z-index: 3;
+            white-space: nowrap;
+        }
+        /* Cardinality */
+        .c { position: absolute; font-size: 7px; font-weight: 900; z-index: 3; }
+        .c1 { color: #f1c40f; }
+        .cN { color: #e74c3c; }
+
+        /* Footer */
+        .footer {
+            display: flex; justify-content: center; align-items: center; gap: 12px;
+            margin-top: 4px; padding-top: 4px;
+            border-top: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 3px; font-size: 6px; color: #7a7a8a; }
+        .legend-dot { width: 7px; height: 7px; border-radius: 2px; }
+        .legend-key { display: flex; align-items: center; gap: 3px; font-size: 6px; color: #7a7a8a; }
+
+        @media print {
+            body { background: #fff; color: #222; width: 100%; }
+            .entity-header, .legend-dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .entity-body { background: #f9f9f9; }
+            .attr-name { color: #333; }
+            .wire-solid, .wire-dash { stroke: #999; }
+            .rlabel { background: #fff; color: #446; border-color: #ccc; }
+        }
+    </style>
+</head>
+<body>
+    <h1>ENTITY RELATIONSHIP DIAGRAM (ERD)</h1>
+    <p class="subtitle">NextGen Ecommerce &mdash; Supabase PostgreSQL (Cloud) + Room SQLite (Local) &nbsp;|&nbsp; 7 Entities &nbsp;|&nbsp; 10 Relationships</p>
+
+    <div class="er-canvas">
+
+        <!--
+            LAYOUT MAP (approximate centers):
+            ==============================================
+            Users(80,90)     CartItems(330,120)    Products(600,160)   Enums(920+)
+            Wishlist(80,370)  Orders(330,370)      Reviews(600,420)
+                             Notifications(330,540)
+            ==============================================
+            Entity sizes used for wire endpoint calculation:
+            Users:         x=10  y=20  w=148 h=135  → right=158, bottom=155
+            CartItems:     x=248 y=20  w=170 h=210  → left=248, bottom=230
+            Products:      x=510 y=20  w=168 h=310  → left=510, bottom=330
+            Orders:        x=248 y=280 w=170 h=215  → left=248, top=280, right=418, bottom=495
+            Reviews:       x=510 y=355 w=165 h=170  → left=510, top=355
+            Wishlist:      x=10  y=290 w=155 h=110  → top=290, right=165
+            Notifications: x=248 y=520 w=170 h=155  → top=520
+        -->
+
+        <!-- ======== SVG WIRES ======== -->
+        <svg class="wires" viewBox="0 0 1084 600">
+
+            <!-- R1: Users(right:158, y:55) → CartItems(left:248, y:55) — has many -->
+            <path class="wire wire-solid" d="M 158 55 L 248 55" />
+
+            <!-- R2: Users(right:158, y:100) → Orders(left:248, y:320) — places -->
+            <path class="wire wire-solid" d="M 158 100 C 210 100, 210 320, 248 320" />
+
+            <!-- R3: Users(bottom:80, y:155) → Wishlist(top:80, y:290) — saves -->
+            <path class="wire wire-solid" d="M 80 155 L 80 290" />
+
+            <!-- R4: Users(right:158, y:130) → Reviews(left:510, y:420) — writes -->
+            <path class="wire wire-solid" d="M 158 130 C 230 130, 230 420, 510 420" />
+
+            <!-- R5: Users(bottom:40, y:155) → Notifications(left:248, y:570) — receives -->
+            <path class="wire wire-solid" d="M 40 155 C 40 570, 200 570, 248 570" />
+
+            <!-- R6: Products(left:510, y:55) → CartItems(right:418, y:80) — added to -->
+            <path class="wire wire-solid" d="M 510 55 L 418 80" />
+
+            <!-- R7: Products(left:510, y:250) → Reviews(left:590, y:355) — reviewed in -->
+            <path class="wire wire-solid" d="M 590 330 L 590 355" />
+
+            <!-- R8: Products(left:510, y:200) → Wishlist(right:165, y:340) — wishlisted -->
+            <path class="wire wire-solid" d="M 510 200 C 400 200, 200 340, 165 340" />
+
+            <!-- R9: Products(left:510, y:280) → Orders(right:418, y:360) — contains JSON -->
+            <path class="wire wire-dash" d="M 510 280 C 470 280, 460 360, 418 360" />
+
+            <!-- R10: Orders(bottom:330, y:495) → Notifications(top:330, y:520) — triggers -->
+            <path class="wire wire-solid" d="M 330 495 L 330 520" />
+
+        </svg>
+
+        <!-- ======== R1: Users → Cart Items ======== -->
+        <div class="rlabel" style="top:42px; left:178px;">has many</div>
+        <span class="c c1" style="top:48px; left:148px;">1</span>
+        <span class="c cN" style="top:48px; left:240px;">N</span>
+
+        <!-- ======== R2: Users → Orders ======== -->
+        <div class="rlabel" style="top:200px; left:190px;">places</div>
+        <span class="c c1" style="top:92px; left:148px;">1</span>
+        <span class="c cN" style="top:312px; left:240px;">N</span>
+
+        <!-- ======== R3: Users → Wishlist ======== -->
+        <div class="rlabel" style="top:215px; left:55px;">saves</div>
+        <span class="c c1" style="top:157px; left:72px;">1</span>
+        <span class="c cN" style="top:280px; left:72px;">N</span>
+
+        <!-- ======== R4: Users → Reviews ======== -->
+        <div class="rlabel" style="top:280px; left:320px;">writes</div>
+        <span class="c c1" style="top:122px; left:148px;">1</span>
+        <span class="c cN" style="top:413px; left:502px;">N</span>
+
+        <!-- ======== R5: Users → Notifications ======== -->
+        <div class="rlabel" style="top:410px; left:80px;">receives</div>
+        <span class="c c1" style="top:157px; left:30px;">1</span>
+        <span class="c cN" style="top:563px; left:240px;">N</span>
+
+        <!-- ======== R6: Products → Cart Items ======== -->
+        <div class="rlabel" style="top:50px; left:438px;">added to</div>
+        <span class="c c1" style="top:48px; left:502px;">1</span>
+        <span class="c cN" style="top:72px; left:420px;">N</span>
+
+        <!-- ======== R7: Products → Reviews ======== -->
+        <div class="rlabel" style="top:336px; left:600px;">reviewed in</div>
+        <span class="c c1" style="top:320px; left:580px;">1</span>
+        <span class="c cN" style="top:348px; left:580px;">N</span>
+
+        <!-- ======== R8: Products → Wishlist ======== -->
+        <div class="rlabel" style="top:250px; left:300px;">wishlisted</div>
+        <span class="c c1" style="top:193px; left:502px;">1</span>
+        <span class="c cN" style="top:332px; left:167px;">N</span>
+
+        <!-- ======== R9: Products → Orders (JSON) ======== -->
+        <div class="rlabel" style="top:310px; left:438px; border-style:dashed;">contains (JSON)</div>
+        <span class="c c1" style="top:273px; left:502px;">1</span>
+        <span class="c cN" style="top:353px; left:420px;">N</span>
+
+        <!-- ======== R10: Orders → Notifications ======== -->
+        <div class="rlabel" style="top:500px; left:340px;">triggers</div>
+        <span class="c c1" style="top:488px; left:322px;">1</span>
+        <span class="c cN" style="top:514px; left:322px;">N</span>
+
+
+        <!-- ================================================================ -->
+        <!--                         ENTITY TABLES                            -->
+        <!-- ================================================================ -->
+
+        <!-- ======== USERS : x=10 y=20 w=148 ======== -->
+        <div class="entity e-users" style="top:20px; left:10px; width:148px;">
+            <div class="entity-header">Users</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">UUID</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">email</span> <span class="attr-type">TEXT UNIQUE</span></div>
+                <div class="attr"><span class="attr-name">name</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">phone</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">profile_image_url</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">role</span> <span class="attr-type">TEXT</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">created_at</span> <span class="attr-type">TIMESTAMP</span></div>
+                <div class="attr"><span class="attr-name">updated_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== CART ITEMS : x=248 y=20 w=170 ======== -->
+        <div class="entity e-cart" style="top:20px; left:248px; width:170px;">
+            <div class="entity-header">Cart Items</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">UUID</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">user_id</span> <span class="attr-type">UUID &rarr; Users</span></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">product_id</span> <span class="attr-type">UUID &rarr; Products</span></div>
+                <div class="attr"><span class="attr-name">product_name</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">product_image</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">price</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-name">original_price</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">quantity</span> <span class="attr-type">INTEGER</span></div>
+                <div class="attr"><span class="attr-name">selected_size</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">selected_color</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">store_name</span> <span class="attr-type">TEXT</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">added_at</span> <span class="attr-type">TIMESTAMP</span></div>
+                <div class="attr"><span class="attr-name">updated_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== PRODUCTS : x=510 y=20 w=168 ======== -->
+        <div class="entity e-products" style="top:20px; left:510px; width:168px;">
+            <div class="entity-header">Products</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">UUID</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">name</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">description</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">price</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-name">original_price</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">category</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">sub_category</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">images</span> <span class="attr-type">TEXT[]</span></div>
+                <div class="attr"><span class="attr-name">image_url</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">ar_model_url</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">lens_id</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">sizes</span> <span class="attr-type">TEXT[]</span></div>
+                <div class="attr"><span class="attr-name">colors</span> <span class="attr-type">TEXT[]</span></div>
+                <div class="attr"><span class="attr-name">rating</span> <span class="attr-type">FLOAT</span></div>
+                <div class="attr"><span class="attr-name">review_count</span> <span class="attr-type">INTEGER</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">stock</span> <span class="attr-type">INTEGER</span></div>
+                <div class="attr"><span class="attr-name">in_stock</span> <span class="attr-type">BOOLEAN</span></div>
+                <div class="attr"><span class="attr-name">is_featured</span> <span class="attr-type">BOOLEAN</span></div>
+                <div class="attr"><span class="attr-name">is_new</span> <span class="attr-type">BOOLEAN</span></div>
+                <div class="attr"><span class="attr-name">tags</span> <span class="attr-type">TEXT[]</span></div>
+                <div class="attr"><span class="attr-name">brand</span> <span class="attr-type">TEXT</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">created_at</span> <span class="attr-type">TIMESTAMP</span></div>
+                <div class="attr"><span class="attr-name">updated_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== WISHLIST : x=10 y=290 w=155 ======== -->
+        <div class="entity e-wishlist" style="top:290px; left:10px; width:155px;">
+            <div class="entity-header">Wishlist Items</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">product_id</span> <span class="attr-type">UUID &rarr; Products</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">user_id</span> <span class="attr-type">UUID &rarr; Users</span></div>
+                <div class="attr"><span class="attr-name">product_name</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">product_image</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">price</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">added_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== ORDERS : x=248 y=280 w=170 ======== -->
+        <div class="entity e-orders" style="top:280px; left:248px; width:170px;">
+            <div class="entity-header">Orders</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">UUID</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">user_id</span> <span class="attr-type">UUID &rarr; Users</span></div>
+                <div class="attr"><span class="attr-name">items</span> <span class="attr-type">JSONB</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">subtotal</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-name">tax</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-name">shipping</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">total</span> <span class="attr-type">DECIMAL</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">status</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">payment_status</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">payment_method</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">shipping_address</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">tracking_number</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">estimated_delivery</span> <span class="attr-type">TEXT</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">created_at</span> <span class="attr-type">TIMESTAMP</span></div>
+                <div class="attr"><span class="attr-name">updated_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== REVIEWS : x=510 y=355 w=168 ======== -->
+        <div class="entity e-reviews" style="top:355px; left:510px; width:168px;">
+            <div class="entity-header">Reviews</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">UUID</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">product_id</span> <span class="attr-type">UUID &rarr; Products</span></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">user_id</span> <span class="attr-type">UUID &rarr; Users</span></div>
+                <div class="attr"><span class="attr-name">user_name</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">user_image_url</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">rating</span> <span class="attr-type">INTEGER</span></div>
+                <div class="attr"><span class="attr-name">title</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">comment</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">images</span> <span class="attr-type">TEXT[]</span></div>
+                <div class="attr"><span class="attr-name">helpful</span> <span class="attr-type">INTEGER</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">created_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+        <!-- ======== NOTIFICATIONS : x=248 y=520 w=170 ======== -->
+        <div class="entity e-notifications" style="top:520px; left:248px; width:170px;">
+            <div class="entity-header">Notifications</div>
+            <div class="entity-body">
+                <div class="attr"><span class="attr-key pk">PK</span> <span class="attr-name">id</span> <span class="attr-type">INT AUTO</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-key fk">FK</span> <span class="attr-name">user_id</span> <span class="attr-type">UUID &rarr; Users</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">title</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">message</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-key nn">NN</span> <span class="attr-name">type</span> <span class="attr-type">TEXT</span></div>
+                <div class="attr"><span class="attr-name">is_read</span> <span class="attr-type">BOOLEAN</span></div>
+                <div class="attr"><span class="attr-name">product_id</span> <span class="attr-type">UUID</span></div>
+                <div class="attr"><span class="attr-name">order_id</span> <span class="attr-type">UUID</span></div>
+                <div class="attr"><span class="attr-name">image_url</span> <span class="attr-type">TEXT</span></div>
+                <div class="divider"></div>
+                <div class="attr"><span class="attr-name">created_at</span> <span class="attr-type">TIMESTAMP</span></div>
+            </div>
+        </div>
+
+
+        <!-- ================================================================ -->
+        <!--                          ENUM BOXES                              -->
+        <!-- ================================================================ -->
+
+        <!-- Product Categories -->
+        <div class="entity e-enum" style="top:20px; left:750px; width:115px;">
+            <div class="entity-header">Product Categories</div>
+            <div class="entity-body">
+                <div class="attr" style="color:#2ecc71;">CLOTHING</div>
+                <div class="attr" style="color:#3498db;">SHOES</div>
+                <div class="attr" style="color:#f39c12;">ACCESSORIES</div>
+                <div class="attr" style="color:#e74c3c;">FURNITURE</div>
+                <div class="attr" style="color:#9b59b6;">ELECTRONICS</div>
+                <div class="attr" style="color:#1abc9c;">HOME_DECOR</div>
+                <div class="attr" style="color:#f1c40f;">JEWELRY</div>
+                <div class="attr" style="color:#e67e22;">BAGS</div>
+            </div>
+        </div>
+
+        <!-- User Roles -->
+        <div class="entity e-enum" style="top:175px; left:750px; width:115px;">
+            <div class="entity-header">User Roles</div>
+            <div class="entity-body">
+                <div class="attr" style="color:#3498db;">customer</div>
+                <div class="attr" style="color:#e74c3c;">admin</div>
+            </div>
+        </div>
+
+        <!-- Order Status -->
+        <div class="entity e-enum" style="top:240px; left:750px; width:115px;">
+            <div class="entity-header">Order Status</div>
+            <div class="entity-body">
+                <div class="attr" style="color:#e74c3c;">PENDING</div>
+                <div class="attr" style="color:#f39c12;">CONFIRMED</div>
+                <div class="attr" style="color:#3498db;">PROCESSING</div>
+                <div class="attr" style="color:#2980b9;">SHIPPED</div>
+                <div class="attr" style="color:#27ae60;">DELIVERED</div>
+                <div class="attr" style="color:#c0392b;">CANCELLED</div>
+            </div>
+        </div>
+
+        <!-- Payment Status -->
+        <div class="entity e-enum" style="top:385px; left:750px; width:115px;">
+            <div class="entity-header">Payment Status</div>
+            <div class="entity-body">
+                <div class="attr" style="color:#f39c12;">PENDING</div>
+                <div class="attr" style="color:#27ae60;">COMPLETED</div>
+                <div class="attr" style="color:#c0392b;">FAILED</div>
+                <div class="attr" style="color:#8e44ad;">REFUNDED</div>
+            </div>
+        </div>
+
+        <!-- Notification Types -->
+        <div class="entity e-enum" style="top:480px; left:750px; width:115px;">
+            <div class="entity-header">Notification Types</div>
+            <div class="entity-body">
+                <div class="attr" style="color:#e74c3c;">ORDER_UPDATE</div>
+                <div class="attr" style="color:#f39c12;">PROMOTION</div>
+                <div class="attr" style="color:#27ae60;">PRODUCT_RESTOCK</div>
+                <div class="attr" style="color:#3498db;">PRICE_DROP</div>
+                <div class="attr" style="color:#8e44ad;">DELIVERY</div>
+                <div class="attr" style="color:#16a085;">PAYMENT</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="legend-item"><div class="legend-dot" style="background:#2e86c1"></div>Users</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#27ae60"></div>Products</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div>Cart Items</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#cb4335"></div>Orders</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8e44ad"></div>Reviews</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#16a085"></div>Wishlist</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#34495e"></div>Notifications</div>
+        <span style="color:#333; font-size:5px;">|</span>
+        <div class="legend-key"><span class="attr-key pk" style="font-size:5px;">PK</span><span style="font-size:6px; color:#777;"> Primary Key</span></div>
+        <div class="legend-key"><span class="attr-key fk" style="font-size:5px;">FK</span><span style="font-size:6px; color:#777;"> Foreign Key</span></div>
+        <div class="legend-key"><span class="attr-key nn" style="font-size:5px;">NN</span><span style="font-size:6px; color:#777;"> Not Null</span></div>
+        <span style="color:#333; font-size:5px;">|</span>
+        <span style="font-size:6px; color:#f1c40f; font-weight:800;">1</span><span style="font-size:5.5px; color:#556;"> One &nbsp;</span>
+        <span style="font-size:6px; color:#e74c3c; font-weight:800;">N</span><span style="font-size:5.5px; color:#556;"> Many &nbsp;</span>
+        <span style="font-size:5.5px; color:#556;">- - - JSON ref</span>
+    </div>
+</body>
+</html>

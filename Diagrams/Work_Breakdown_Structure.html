@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextGen Ecommerce - Work Breakdown Structure (WBS)</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0B0B1A;
+            color: #e0e0e0;
+            width: 1120px;
+            padding: 14px 18px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 15px;
+            margin-bottom: 2px;
+            color: #00BFFF;
+            letter-spacing: 1.5px;
+            font-weight: 800;
+        }
+        .subtitle { text-align: center; color: #7a7a8a; font-size: 8.5px; margin-bottom: 10px; }
+
+        /* ROOT */
+        .root-row { display: flex; justify-content: center; margin-bottom: 0; }
+        .root-node {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            padding: 7px 28px;
+            border-radius: 8px;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-align: center;
+        }
+        .root-node span { font-size: 7px; opacity: 0.75; display: block; margin-top: 1px; }
+
+        .vline-root { width: 2px; height: 10px; background: #667eea; margin: 0 auto; }
+        .hline-bar { height: 2px; background: linear-gradient(90deg, #c0392b, #2980b9, #27ae60, #e67e22, #8e44ad, #16a085); margin: 0 30px; border-radius: 1px; }
+
+        /* Phase columns */
+        .phases-row {
+            display: flex;
+            gap: 5px;
+            margin-top: 0;
+        }
+        .phase-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 0;
+        }
+        .phase-vline { width: 2px; height: 8px; }
+        .phase-header {
+            width: 100%;
+            padding: 5px 4px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 7.5px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }
+        .p1 .phase-header, .p1 .phase-vline { background: #c0392b; }
+        .p2 .phase-header, .p2 .phase-vline { background: #2980b9; }
+        .p3 .phase-header, .p3 .phase-vline { background: #27ae60; }
+        .p4 .phase-header, .p4 .phase-vline { background: #e67e22; }
+        .p5 .phase-header, .p5 .phase-vline { background: #8e44ad; }
+        .p6 .phase-header, .p6 .phase-vline { background: #16a085; }
+
+        .phase-body { width: 100%; }
+
+        .sub-group { margin-bottom: 3px; }
+        .sub-header {
+            padding: 3px 5px;
+            font-size: 6.8px;
+            font-weight: 700;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.06);
+            margin-bottom: 2px;
+            border-left: 2.5px solid transparent;
+            color: #d0d0e0;
+        }
+        .p1 .sub-header { border-left-color: #c0392b; background: rgba(192,57,43,0.2); color: #f1948a; }
+        .p2 .sub-header { border-left-color: #2980b9; background: rgba(41,128,185,0.2); color: #85c1e9; }
+        .p3 .sub-header { border-left-color: #27ae60; background: rgba(39,174,96,0.2); color: #82e0aa; }
+        .p4 .sub-header { border-left-color: #e67e22; background: rgba(230,126,34,0.2); color: #f0b27a; }
+        .p5 .sub-header { border-left-color: #8e44ad; background: rgba(142,68,173,0.2); color: #bb8fce; }
+        .p6 .sub-header { border-left-color: #16a085; background: rgba(22,160,133,0.2); color: #76d7c4; }
+
+        .task-list { list-style: none; padding: 0 0 0 6px; }
+        .task-item {
+            font-size: 5.8px;
+            padding: 1.5px 4px;
+            margin-bottom: 1px;
+            color: #9a9ab0;
+            background: rgba(255,255,255,0.025);
+            border-radius: 2px;
+            border-left: 1.5px solid rgba(255,255,255,0.08);
+            line-height: 1.35;
+        }
+        .task-item .code { color: #555; font-size: 5.5px; margin-right: 2px; }
+
+        .footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 14px;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 6.5px; color: #7a7a8a; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+        .footer-stat { font-size: 6.5px; color: #555; }
+
+        @media print {
+            body { background: #fff; color: #222; width: 100%; }
+            .phase-header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .sub-header { background: #f0f0f0; color: #333; }
+            .task-item { color: #555; background: #fafafa; }
+            .hline-bar, .root-node, .legend-dot, .phase-vline { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <h1>WORK BREAKDOWN STRUCTURE (WBS)</h1>
+    <p class="subtitle">NextGen Ecommerce &mdash; AI-Powered Virtual Try-On E-Commerce Platform</p>
+
+    <div class="root-row"><div class="root-node">NextGen Ecommerce Project<span>Android + Node.js + Supabase + RapidAPI Try-On</span></div></div>
+    <div class="vline-root"></div>
+    <div class="hline-bar"></div>
+
+    <div class="phases-row">
+
+        <!-- ====== PHASE 1: PROJECT MANAGEMENT ====== -->
+        <div class="phase-col p1">
+            <div class="phase-vline"></div>
+            <div class="phase-header">1. PROJECT MANAGEMENT</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">1.1 Project Planning</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">1.1.1</span> Define Project Scope</li>
+                        <li class="task-item"><span class="code">1.1.2</span> Identify Stakeholders</li>
+                        <li class="task-item"><span class="code">1.1.3</span> Create Project Timeline</li>
+                        <li class="task-item"><span class="code">1.1.4</span> Resource Allocation</li>
+                        <li class="task-item"><span class="code">1.1.5</span> Risk Assessment</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">1.2 Team & Communication</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">1.2.1</span> Define Team Roles</li>
+                        <li class="task-item"><span class="code">1.2.2</span> Task Assignment</li>
+                        <li class="task-item"><span class="code">1.2.3</span> Communication Plan</li>
+                        <li class="task-item"><span class="code">1.2.4</span> Progress Tracking</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">1.3 Environment Setup</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">1.3.1</span> Repository Initialization</li>
+                        <li class="task-item"><span class="code">1.3.2</span> Android Studio Setup</li>
+                        <li class="task-item"><span class="code">1.3.3</span> Node.js Backend Setup</li>
+                        <li class="task-item"><span class="code">1.3.4</span> Supabase Cloud Config</li>
+                        <li class="task-item"><span class="code">1.3.5</span> RapidAPI Account Setup</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">1.4 Documentation</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">1.4.1</span> Project Proposal</li>
+                        <li class="task-item"><span class="code">1.4.2</span> Meeting Minutes</li>
+                        <li class="task-item"><span class="code">1.4.3</span> Progress Reports</li>
+                        <li class="task-item"><span class="code">1.4.4</span> Final Documentation</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== PHASE 2: ANALYSIS ====== -->
+        <div class="phase-col p2">
+            <div class="phase-vline"></div>
+            <div class="phase-header">2. ANALYSIS</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">2.1 Requirements Gathering</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">2.1.1</span> Functional Requirements</li>
+                        <li class="task-item"><span class="code">2.1.2</span> Non-Functional Requirements</li>
+                        <li class="task-item"><span class="code">2.1.3</span> User Stories & Use Cases</li>
+                        <li class="task-item"><span class="code">2.1.4</span> Requirements Prioritization</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">2.2 Technology Analysis</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">2.2.1</span> Android (Kotlin + Compose)</li>
+                        <li class="task-item"><span class="code">2.2.2</span> Node.js + Express.js Backend</li>
+                        <li class="task-item"><span class="code">2.2.3</span> Supabase (DB, Auth, Storage)</li>
+                        <li class="task-item"><span class="code">2.2.4</span> RapidAPI Try-On Diffusion</li>
+                        <li class="task-item"><span class="code">2.2.5</span> Snap AR Camera Kit</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">2.3 Feasibility Study</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">2.3.1</span> Technical Feasibility</li>
+                        <li class="task-item"><span class="code">2.3.2</span> Operational Feasibility</li>
+                        <li class="task-item"><span class="code">2.3.3</span> Economic Feasibility</li>
+                        <li class="task-item"><span class="code">2.3.4</span> API Limits & Constraints</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">2.4 Existing System Study</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">2.4.1</span> Competitor Analysis</li>
+                        <li class="task-item"><span class="code">2.4.2</span> Market Research</li>
+                        <li class="task-item"><span class="code">2.4.3</span> Gap Analysis</li>
+                        <li class="task-item"><span class="code">2.4.4</span> AI Try-On Benchmarking</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== PHASE 3: DESIGN ====== -->
+        <div class="phase-col p3">
+            <div class="phase-vline"></div>
+            <div class="phase-header">3. DESIGN</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">3.1 System Architecture</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">3.1.1</span> MVVM Architecture Design</li>
+                        <li class="task-item"><span class="code">3.1.2</span> Client-Server Architecture</li>
+                        <li class="task-item"><span class="code">3.1.3</span> Repository Pattern Design</li>
+                        <li class="task-item"><span class="code">3.1.4</span> API Contract Definition</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">3.2 Database Design</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">3.2.1</span> ER Diagram</li>
+                        <li class="task-item"><span class="code">3.2.2</span> Supabase Tables Schema</li>
+                        <li class="task-item"><span class="code">3.2.3</span> Room Local DB Schema</li>
+                        <li class="task-item"><span class="code">3.2.4</span> RLS Policies Design</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">3.3 UI/UX Design</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">3.3.1</span> Wireframes & Mockups</li>
+                        <li class="task-item"><span class="code">3.3.2</span> Material3 Theme Design</li>
+                        <li class="task-item"><span class="code">3.3.3</span> Navigation Flow Design</li>
+                        <li class="task-item"><span class="code">3.3.4</span> Component Library Design</li>
+                        <li class="task-item"><span class="code">3.3.5</span> Light/Dark Theme Design</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">3.4 API Design</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">3.4.1</span> REST Endpoints Design</li>
+                        <li class="task-item"><span class="code">3.4.2</span> Auth Flow Design</li>
+                        <li class="task-item"><span class="code">3.4.3</span> Try-On API Integration Plan</li>
+                        <li class="task-item"><span class="code">3.4.4</span> Error Handling Strategy</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">3.5 Security Design</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">3.5.1</span> JWT Auth Strategy</li>
+                        <li class="task-item"><span class="code">3.5.2</span> Row Level Security Plan</li>
+                        <li class="task-item"><span class="code">3.5.3</span> Storage Access Policies</li>
+                        <li class="task-item"><span class="code">3.5.4</span> Role-Based Access Control</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== PHASE 4: DEVELOPMENT ====== -->
+        <div class="phase-col p4">
+            <div class="phase-vline"></div>
+            <div class="phase-header">4. DEVELOPMENT</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">4.1 Android Frontend</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">4.1.1</span> Hilt DI & Navigation Setup</li>
+                        <li class="task-item"><span class="code">4.1.2</span> Auth Screens (Login/Register)</li>
+                        <li class="task-item"><span class="code">4.1.3</span> Home & Product Screens</li>
+                        <li class="task-item"><span class="code">4.1.4</span> Cart & Checkout Screens</li>
+                        <li class="task-item"><span class="code">4.1.5</span> Order Management Screens</li>
+                        <li class="task-item"><span class="code">4.1.6</span> Profile & Settings Screens</li>
+                        <li class="task-item"><span class="code">4.1.7</span> Wishlist & Notifications</li>
+                        <li class="task-item"><span class="code">4.1.8</span> Admin Dashboard Screens</li>
+                        <li class="task-item"><span class="code">4.1.9</span> Search & Filtering</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">4.2 Backend Development</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">4.2.1</span> Express Server & Middleware</li>
+                        <li class="task-item"><span class="code">4.2.2</span> Auth API (Register/Login)</li>
+                        <li class="task-item"><span class="code">4.2.3</span> Products API (CRUD)</li>
+                        <li class="task-item"><span class="code">4.2.4</span> Orders API</li>
+                        <li class="task-item"><span class="code">4.2.5</span> Reviews & Users API</li>
+                        <li class="task-item"><span class="code">4.2.6</span> Admin API Endpoints</li>
+                        <li class="task-item"><span class="code">4.2.7</span> Try-On Diffusion API</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">4.3 Database Implementation</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">4.3.1</span> Supabase Tables & RLS</li>
+                        <li class="task-item"><span class="code">4.3.2</span> Room DB Entities & DAOs</li>
+                        <li class="task-item"><span class="code">4.3.3</span> Supabase Auth Integration</li>
+                        <li class="task-item"><span class="code">4.3.4</span> Storage Buckets & Policies</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">4.4 AI & AR Integration</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">4.4.1</span> RapidAPI Try-On Diffusion</li>
+                        <li class="task-item"><span class="code">4.4.2</span> Image Processing Pipeline</li>
+                        <li class="task-item"><span class="code">4.4.3</span> Snap Camera Kit AR Try-On</li>
+                        <li class="task-item"><span class="code">4.4.4</span> ARCore & Sceneform Setup</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">4.5 Data Layer</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">4.5.1</span> Repositories Implementation</li>
+                        <li class="task-item"><span class="code">4.5.2</span> ViewModels Implementation</li>
+                        <li class="task-item"><span class="code">4.5.3</span> Offline Sync (Room + Supabase)</li>
+                        <li class="task-item"><span class="code">4.5.4</span> Retrofit Network Layer</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== PHASE 5: TESTING ====== -->
+        <div class="phase-col p5">
+            <div class="phase-vline"></div>
+            <div class="phase-header">5. TESTING</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">5.1 Unit Testing</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">5.1.1</span> ViewModel Unit Tests</li>
+                        <li class="task-item"><span class="code">5.1.2</span> Repository Unit Tests</li>
+                        <li class="task-item"><span class="code">5.1.3</span> Backend API Unit Tests</li>
+                        <li class="task-item"><span class="code">5.1.4</span> Data Model Validation</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">5.2 Integration Testing</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">5.2.1</span> API Endpoint Testing</li>
+                        <li class="task-item"><span class="code">5.2.2</span> Supabase Auth Flow Test</li>
+                        <li class="task-item"><span class="code">5.2.3</span> Database CRUD Operations</li>
+                        <li class="task-item"><span class="code">5.2.4</span> Try-On API Integration Test</li>
+                        <li class="task-item"><span class="code">5.2.5</span> Room + Supabase Sync Test</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">5.3 UI/UX Testing</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">5.3.1</span> Screen Navigation Testing</li>
+                        <li class="task-item"><span class="code">5.3.2</span> Form Validation Testing</li>
+                        <li class="task-item"><span class="code">5.3.3</span> Responsive Layout Testing</li>
+                        <li class="task-item"><span class="code">5.3.4</span> Dark/Light Theme Testing</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">5.4 Functional Testing</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">5.4.1</span> Auth Flow (Login/Register)</li>
+                        <li class="task-item"><span class="code">5.4.2</span> Product Browse & Search</li>
+                        <li class="task-item"><span class="code">5.4.3</span> Cart & Checkout Flow</li>
+                        <li class="task-item"><span class="code">5.4.4</span> Order Placement & Tracking</li>
+                        <li class="task-item"><span class="code">5.4.5</span> Virtual Try-On Flow</li>
+                        <li class="task-item"><span class="code">5.4.6</span> Admin Product Management</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">5.5 Performance & Security</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">5.5.1</span> API Response Time Testing</li>
+                        <li class="task-item"><span class="code">5.5.2</span> Image Loading Performance</li>
+                        <li class="task-item"><span class="code">5.5.3</span> RLS Policy Verification</li>
+                        <li class="task-item"><span class="code">5.5.4</span> Auth Security Testing</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== PHASE 6: PRODUCTION ====== -->
+        <div class="phase-col p6">
+            <div class="phase-vline"></div>
+            <div class="phase-header">6. PRODUCTION</div>
+            <div class="phase-body">
+                <div class="sub-group">
+                    <div class="sub-header">6.1 Deployment</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">6.1.1</span> Backend Server Deployment</li>
+                        <li class="task-item"><span class="code">6.1.2</span> Supabase Production Config</li>
+                        <li class="task-item"><span class="code">6.1.3</span> Database Migration</li>
+                        <li class="task-item"><span class="code">6.1.4</span> Environment Variables Setup</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">6.2 App Release</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">6.2.1</span> APK/AAB Build Generation</li>
+                        <li class="task-item"><span class="code">6.2.2</span> Play Store Listing Setup</li>
+                        <li class="task-item"><span class="code">6.2.3</span> App Signing & Versioning</li>
+                        <li class="task-item"><span class="code">6.2.4</span> Play Store Submission</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">6.3 Monitoring & Maintenance</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">6.3.1</span> Server Health Monitoring</li>
+                        <li class="task-item"><span class="code">6.3.2</span> Error & Crash Tracking</li>
+                        <li class="task-item"><span class="code">6.3.3</span> API Usage Monitoring</li>
+                        <li class="task-item"><span class="code">6.3.4</span> Database Backup Strategy</li>
+                    </ul>
+                </div>
+                <div class="sub-group">
+                    <div class="sub-header">6.4 User Support</div>
+                    <ul class="task-list">
+                        <li class="task-item"><span class="code">6.4.1</span> User Feedback Collection</li>
+                        <li class="task-item"><span class="code">6.4.2</span> Bug Fix & Patch Releases</li>
+                        <li class="task-item"><span class="code">6.4.3</span> Feature Update Planning</li>
+                        <li class="task-item"><span class="code">6.4.4</span> User Training & Guides</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>Project Management</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2980b9"></div>Analysis</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#27ae60"></div>Design</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div>Development</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8e44ad"></div>Testing</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#16a085"></div>Production</div>
+        <div class="footer-stat">|&nbsp; 6 Phases &nbsp;|&nbsp; 27 Work Packages &nbsp;|&nbsp; 117 Tasks</div>
+    </div>
+</body>
+</html>
