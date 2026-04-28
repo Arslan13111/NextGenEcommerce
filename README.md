@@ -6,26 +6,39 @@ A full-featured Android e-commerce app for fashion retail, with AI-powered virtu
 
 ## Latest Update: Performance & Branding Optimization (v3.0 Final)
 
-### **Title: Application Branding & Theme System Optimization**
+### 1. Order Fulfillment & Return Infrastructure
 
-**Description:**
-This update establishes a cohesive visual identity and ensures a seamless user experience across different system settings and device types.
+*   **Granular Order Splitting:** The OrderRepository was re-engineered to split multi-item checkouts into individual orders, assigning each product a unique `order_id` and `order_number`.
+*   **Weighted Financial Distribution:** Developed a proportional algorithm to distribute total shipping costs and coupons across split orders based on the price ratio of each item.
+*   **Isolated Returns:** By treating products as standalone orders, users can return a single item without impacting the status of other items in the same purchase session.
+*   **Regional Payment Support:** Resolved compilation crashes by adding exhaustive enum handling for Pakistani payment methods, specifically **EASYPAISA** and **JAZZCASH**.
 
-#### **1. Branding & Logo Integration**
-*   **Universal Logo Update:** Replaced all placeholder branding with the official `logo.png` across Splash, Login, Register, and About screens.
-*   **Circular Identity:** Applied a precise circular crop and high-quality scaling to the logo on authentication screens.
-*   **Custom Home Header:** Integrated a specialized `home_logo.png` into the Home screen's top bar, optimized for a professional look.
-*   **Launcher Refresh:** Updated the Android system launcher and round icons to match the new branding.
+### 2. Admin Dashboard & Financial Systems
 
-#### **2. Intelligent Theme System**
-*   **System Theme Synchronization:** The app now automatically toggles between Light and Dark modes in real-time based on the user's Android system settings.
-*   **Enhanced Settings Control:** Added a "Follow System" toggle in the settings menu for automated or manual appearance management.
+*   **Dynamic Management Interface:** Replaced static tabs with an interactive, scrollable system for Overview, Products, Orders, and Returns.
+*   **Task Visibility:** Implemented stylized real-time badges on the "Orders" and "Returns" tabs to help admins identify pending tasks quickly.
+*   **Return Logic Safeguards:** The "Return Money" button is automatically hidden if a request is rejected to prevent accidental refunds.
+*   **Visual Feedback:** Added distinct red "Rejected" status badges and icons for clear confirmation of admin decisions.
+*   **Advanced Analytics:**
+    *   Created a **Revenue Detail Screen** showing Gross/Net Revenue, Refunded amounts, and Pending refunds.
+    *   Introduced a **Product Sales Overview** card with a Deep Purple theme and a "Top 10 Selling Products" list featuring performance bars.
+    *   Refined revenue logic to ensure deductions only occur when a refund is officially processed.
 
-#### **3. Performance & Structural Stability**
-*   **Layout Stabilization:** Moved the Navigation Bar to a persistent overlay to eliminate "layout jumping" during screen transitions.
-*   **Recomposition Reduction:** Implemented `derivedStateOf` in critical UI components (`HomeScreen`, `ProductDetailScreen`) to improve scrolling performance and reduce CPU usage.
-*   **Build Optimization:** Enabled R8 code minification and resource shrinking for a smaller, faster final APK.
-*   **Smooth Transitions:** Standardized 300ms cross-fade animations for all screen navigation.
+### 3. Visual Identity & Theme Management
+
+*   **Unified Branding:** Replaced all placeholder branding with a new official logo, applying a precise circular crop and high-quality scaling (`ContentScale.Crop`) across Splash, Login, Register, and About screens.
+*   **Intelligent Theming:** The app automatically toggles between Light and Dark modes in real-time based on Android system settings.
+*   **Theme Controls:** Added a "Follow System" toggle in settings, allowing users to either synchronize with their device or manually select a preference.
+*   **Color Mapping Utility:** Developed `ColorUtils` to map administrative hex codes to user-friendly fashion names (e.g., #E53935 to "Red").
+*   **Hex Rendering:** Fixed hex color rendering in `ProductDetailScreen`, `CartItemCard`, and `CheckoutScreen` by checking if names start with "#" before parsing.
+
+### 4. Performance Tuning & Layout Stability
+
+*   **Structural Stabilization:** Moved the Bottom Navigation Bar from the standard Scaffold slot to a persistent Box overlay to eliminate "layout jumping" during screen transitions.
+*   **Data Integrity:** Improved `CartDao` methods to ensure local-to-remote cart synchronization is atomic, preventing duplicate states.
+*   **Schema Enforcement:** Added a unique index constraint to the `cart_items` table (UserId + ProductId + Size + Color) and incremented the Room database version.
+*   **Recomposition Reduction:** Implemented `derivedStateOf` in `HomeScreen.kt` and `ProductDetailScreen.kt` to ensure complex operations only run when data changes, resulting in smoother scrolling.
+*   **Responsive UI:** Converted the Login screen into a scrollable interface to prevent elements from being hidden by the on-screen keyboard.
 
 ---
 
