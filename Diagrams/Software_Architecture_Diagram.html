@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextGen Ecommerce - Software Architecture Diagram</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0B0B1A;
+            color: #e0e0e0;
+            width: 1120px;
+            padding: 14px 18px 10px;
+            margin: 0 auto;
+        }
+        h1 { text-align: center; font-size: 15px; color: #00BFFF; letter-spacing: 1.5px; font-weight: 800; margin-bottom: 1px; }
+        .subtitle { text-align: center; color: #7a7a8a; font-size: 8px; margin-bottom: 10px; }
+
+        /* ---- LAYOUT ---- */
+        .arch-container { display: flex; flex-direction: column; gap: 6px; }
+
+        /* Layer row */
+        .layer-row {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .layer-label {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
+            padding: 6px 5px;
+            font-size: 7px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            text-transform: uppercase;
+        }
+        .layer-content {
+            flex: 1;
+            padding: 7px 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: flex-start;
+            background: rgba(255,255,255,0.02);
+        }
+
+        /* Color themes per layer */
+        .l-presentation .layer-label { background: #2980b9; }
+        .l-viewmodel .layer-label { background: #8e44ad; }
+        .l-repository .layer-label { background: #27ae60; }
+        .l-local .layer-label { background: #e67e22; }
+        .l-backend .layer-label { background: #c0392b; }
+        .l-external .layer-label { background: #16a085; }
+
+        /* Component box */
+        .comp-group {
+            background: rgba(255,255,255,0.04);
+            border-radius: 4px;
+            padding: 4px 6px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .comp-group-title {
+            font-size: 6.5px;
+            font-weight: 700;
+            color: #aaa;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .comp-items { display: flex; flex-wrap: wrap; gap: 3px; }
+
+        .comp {
+            font-size: 6px;
+            padding: 2.5px 5px;
+            border-radius: 3px;
+            color: #ccc;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.03);
+            white-space: nowrap;
+            line-height: 1.3;
+        }
+        /* Accent colors for components by layer */
+        .l-presentation .comp { border-left: 2px solid #3498db; }
+        .l-viewmodel .comp { border-left: 2px solid #9b59b6; }
+        .l-repository .comp { border-left: 2px solid #2ecc71; }
+        .l-local .comp { border-left: 2px solid #f39c12; }
+        .l-backend .comp { border-left: 2px solid #e74c3c; }
+        .l-external .comp { border-left: 2px solid #1abc9c; }
+
+        .comp-icon { font-size: 7px; margin-right: 2px; }
+
+        /* Arrow connectors between layers */
+        .arrow-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            padding: 1px 0;
+        }
+        .arrow-line {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 5.5px;
+            color: #555;
+        }
+        .arrow-line .arr {
+            color: #667eea;
+            font-size: 9px;
+            line-height: 1;
+        }
+        .arrow-line .arr-label { color: #556; font-style: italic; }
+
+        /* Side-by-side sections within a layer */
+        .layer-section {
+            flex: 1;
+            min-width: 0;
+        }
+        .layer-section-title {
+            font-size: 7px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        .l-presentation .layer-section-title { background: rgba(41,128,185,0.2); color: #5dade2; }
+        .l-viewmodel .layer-section-title { background: rgba(142,68,173,0.2); color: #bb8fce; }
+        .l-repository .layer-section-title { background: rgba(39,174,96,0.2); color: #58d68d; }
+        .l-local .layer-section-title { background: rgba(230,126,34,0.2); color: #f0b27a; }
+        .l-backend .layer-section-title { background: rgba(192,57,43,0.2); color: #ec7063; }
+        .l-external .layer-section-title { background: rgba(22,160,133,0.2); color: #76d7c4; }
+
+        /* Tech badge */
+        .tech-badge {
+            font-size: 5.5px;
+            padding: 1.5px 4px;
+            border-radius: 2px;
+            background: rgba(102,126,234,0.15);
+            color: #8899cc;
+            margin-left: 4px;
+            font-weight: 600;
+        }
+
+        /* Legend / Footer */
+        .footer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 6px;
+            padding-top: 5px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .legend-item { display: flex; align-items: center; gap: 3px; font-size: 6px; color: #7a7a8a; }
+        .legend-dot { width: 7px; height: 7px; border-radius: 2px; }
+
+        /* Pattern label */
+        .pattern-tag {
+            font-size: 5.5px;
+            padding: 1.5px 5px;
+            border-radius: 10px;
+            background: rgba(102,126,234,0.12);
+            color: #7788bb;
+            border: 1px solid rgba(102,126,234,0.2);
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        @media print {
+            body { background: #fff; color: #222; width: 100%; }
+            .layer-label { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .comp { color: #444; background: #f8f8f8; border-color: #ddd; }
+            .comp-group { background: #f5f5f5; border-color: #e0e0e0; }
+            .arrow-line .arr { color: #4466aa; }
+            .legend-dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <h1>SOFTWARE ARCHITECTURE DIAGRAM</h1>
+    <p class="subtitle">NextGen Ecommerce &mdash; MVVM Clean Architecture &nbsp;|&nbsp; Android (Kotlin + Jetpack Compose) &nbsp;|&nbsp; Node.js Backend &nbsp;|&nbsp; Supabase Cloud</p>
+
+    <div class="arch-container">
+
+        <!-- ======== LAYER 1: PRESENTATION (UI) ======== -->
+        <div class="layer-row l-presentation">
+            <div class="layer-label">Presentation Layer</div>
+            <div class="layer-content">
+                <div class="layer-section">
+                    <div class="layer-section-title">Screens (Jetpack Compose) <span class="tech-badge">25 Screens</span></div>
+                    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                        <div class="comp-group">
+                            <div class="comp-group-title">Auth</div>
+                            <div class="comp-items">
+                                <div class="comp">SplashScreen</div>
+                                <div class="comp">LoginScreen</div>
+                                <div class="comp">RegisterScreen</div>
+                            </div>
+                        </div>
+                        <div class="comp-group">
+                            <div class="comp-group-title">Product</div>
+                            <div class="comp-items">
+                                <div class="comp">HomeScreen</div>
+                                <div class="comp">ProductListScreen</div>
+                                <div class="comp">ProductDetailScreen</div>
+                                <div class="comp">SearchScreen</div>
+                            </div>
+                        </div>
+                        <div class="comp-group">
+                            <div class="comp-group-title">Cart & Orders</div>
+                            <div class="comp-items">
+                                <div class="comp">CartScreen</div>
+                                <div class="comp">CheckoutScreen</div>
+                                <div class="comp">OrdersScreen</div>
+                                <div class="comp">OrderDetailScreen</div>
+                            </div>
+                        </div>
+                        <div class="comp-group">
+                            <div class="comp-group-title">Try-On & AR</div>
+                            <div class="comp-items">
+                                <div class="comp">TryOnScreen</div>
+                                <div class="comp">LiveARTryOnActivity</div>
+                                <div class="comp">LiveCameraTryOnView</div>
+                            </div>
+                        </div>
+                        <div class="comp-group">
+                            <div class="comp-group-title">Profile & Settings</div>
+                            <div class="comp-items">
+                                <div class="comp">ProfileScreen</div>
+                                <div class="comp">SettingsScreen</div>
+                                <div class="comp">ChangePasswordScreen</div>
+                                <div class="comp">ManageAddressesScreen</div>
+                            </div>
+                        </div>
+                        <div class="comp-group">
+                            <div class="comp-group-title">Other</div>
+                            <div class="comp-items">
+                                <div class="comp">WishlistScreen</div>
+                                <div class="comp">NotificationScreen</div>
+                                <div class="comp">AdminDashboardScreen</div>
+                                <div class="comp">AddProductScreen</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="comp-group" style="margin-top:2px;">
+                    <div class="comp-group-title">UI Components</div>
+                    <div class="comp-items">
+                        <div class="comp">ProductCard</div>
+                        <div class="comp">CartItemCard</div>
+                        <div class="comp">PaymentMethodCard</div>
+                        <div class="comp">ImageCarousel</div>
+                        <div class="comp">CommonButtons</div>
+                    </div>
+                </div>
+                <div class="comp-group" style="margin-top:2px;">
+                    <div class="comp-group-title">Navigation</div>
+                    <div class="comp-items">
+                        <div class="comp">NavGraph</div>
+                        <div class="comp">NavigationRoutes</div>
+                    </div>
+                </div>
+                <div class="comp-group" style="margin-top:2px;">
+                    <div class="comp-group-title">Theme</div>
+                    <div class="comp-items">
+                        <div class="comp">Color.kt</div>
+                        <div class="comp">Type.kt</div>
+                        <div class="comp">Shape.kt</div>
+                        <div class="comp">Theme.kt</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arrow-row">
+            <span class="pattern-tag">MVVM Pattern</span>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">observes StateFlow</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">Hilt DI</span>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">user events</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">Jetpack Compose</span>
+        </div>
+
+        <!-- ======== LAYER 2: VIEWMODEL ======== -->
+        <div class="layer-row l-viewmodel">
+            <div class="layer-label">ViewModel Layer</div>
+            <div class="layer-content">
+                <div class="layer-section">
+                    <div class="layer-section-title">ViewModels (State Management) <span class="tech-badge">Coroutines + StateFlow</span></div>
+                    <div class="comp-items">
+                        <div class="comp">AuthViewModel</div>
+                        <div class="comp">ProductViewModel</div>
+                        <div class="comp">CartViewModel</div>
+                        <div class="comp">OrderViewModel</div>
+                        <div class="comp">WishlistViewModel</div>
+                        <div class="comp">NotificationViewModel</div>
+                        <div class="comp">ThemeViewModel</div>
+                        <div class="comp">TryOnViewModel</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Utilities</div>
+                    <div class="comp-items">
+                        <div class="comp">Resource&lt;T&gt; (Loading/Success/Error)</div>
+                        <div class="comp">PreferencesManager</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arrow-row">
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">calls repository methods</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">Repository Pattern</span>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">returns Flow&lt;T&gt;</span> <span class="arr">&#8593;</span></div>
+        </div>
+
+        <!-- ======== LAYER 3: REPOSITORY / DATA ======== -->
+        <div class="layer-row l-repository">
+            <div class="layer-label">Repository Layer</div>
+            <div class="layer-content">
+                <div class="layer-section">
+                    <div class="layer-section-title">Repositories (Data Abstraction) <span class="tech-badge">Single Source of Truth</span></div>
+                    <div class="comp-items">
+                        <div class="comp">AuthRepository</div>
+                        <div class="comp">ProductRepository</div>
+                        <div class="comp">CartRepository</div>
+                        <div class="comp">OrderRepository</div>
+                        <div class="comp">WishlistRepository</div>
+                        <div class="comp">NotificationRepository</div>
+                        <div class="comp">StorageRepository</div>
+                        <div class="comp">TryOnRepository</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Models</div>
+                    <div class="comp-items">
+                        <div class="comp">ProductModels</div>
+                        <div class="comp">User</div>
+                        <div class="comp">Order</div>
+                        <div class="comp">TryOnModels</div>
+                        <div class="comp">CartItem</div>
+                        <div class="comp">Review</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arrow-row">
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">Room DAO queries</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">Offline-First Sync</span>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">Retrofit HTTP / Supabase SDK</span> <span class="arr">&#8593;</span></div>
+        </div>
+
+        <!-- ======== LAYER 4: LOCAL + NETWORK ======== -->
+        <div class="layer-row l-local">
+            <div class="layer-label">Data Sources</div>
+            <div class="layer-content">
+                <div class="comp-group">
+                    <div class="comp-group-title">Local Database (Room 2.6.1)</div>
+                    <div class="comp-items">
+                        <div class="comp">AppDatabase</div>
+                        <div class="comp">ProductDao</div>
+                        <div class="comp">CartDao</div>
+                        <div class="comp">OrderDao</div>
+                        <div class="comp">UserDao</div>
+                        <div class="comp">WishlistDao</div>
+                        <div class="comp">NotificationDao</div>
+                        <div class="comp">Converters</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Network (Retrofit 2.9 + OkHttp 4.12)</div>
+                    <div class="comp-items">
+                        <div class="comp">RetrofitClient</div>
+                        <div class="comp">ApiService</div>
+                        <div class="comp">TryOnDiffusionApiService</div>
+                        <div class="comp">TryOnDiffusionClient</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Supabase SDK</div>
+                    <div class="comp-items">
+                        <div class="comp">SupabaseConfig</div>
+                        <div class="comp">Postgrest Client</div>
+                        <div class="comp">Auth Client</div>
+                        <div class="comp">Storage Client</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Utilities</div>
+                    <div class="comp-items">
+                        <div class="comp">ImageUtils</div>
+                        <div class="comp">TryOnHelper</div>
+                        <div class="comp">ApiConstants</div>
+                        <div class="comp">NotificationHelper</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arrow-row">
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">HTTPS REST API calls (JSON)</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">Client-Server</span>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">Supabase SDK (Postgrest / Auth / Storage)</span> <span class="arr">&#8593;</span></div>
+        </div>
+
+        <!-- ======== LAYER 5: BACKEND ======== -->
+        <div class="layer-row l-backend">
+            <div class="layer-label">Backend Server</div>
+            <div class="layer-content">
+                <div class="comp-group">
+                    <div class="comp-group-title">Node.js + Express.js (server.js) <span class="tech-badge">Port 3000</span></div>
+                    <div class="comp-items">
+                        <div class="comp">CORS Middleware</div>
+                        <div class="comp">Body Parser</div>
+                        <div class="comp">Supabase Admin Client</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Auth API</div>
+                    <div class="comp-items">
+                        <div class="comp">POST /auth/register</div>
+                        <div class="comp">POST /auth/login</div>
+                        <div class="comp">POST /auth/google-login</div>
+                        <div class="comp">GET /auth/confirm</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Products API</div>
+                    <div class="comp-items">
+                        <div class="comp">GET /products</div>
+                        <div class="comp">GET /products/:id</div>
+                        <div class="comp">GET /products/search</div>
+                        <div class="comp">GET /products/featured</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Orders & Reviews API</div>
+                    <div class="comp-items">
+                        <div class="comp">POST /orders</div>
+                        <div class="comp">GET /orders/:id</div>
+                        <div class="comp">GET /orders/user/:userId</div>
+                        <div class="comp">PUT /orders/:id/status</div>
+                        <div class="comp">POST /reviews</div>
+                        <div class="comp">GET /reviews/product/:id</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Users & Admin API</div>
+                    <div class="comp-items">
+                        <div class="comp">GET /users/:id</div>
+                        <div class="comp">PUT /users/:id</div>
+                        <div class="comp">POST /admin/products</div>
+                        <div class="comp">PUT /admin/products/:id</div>
+                        <div class="comp">DELETE /admin/products/:id</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Try-On API</div>
+                    <div class="comp-items">
+                        <div class="comp">POST /api/try-on-diffusion</div>
+                        <div class="comp">Base64 Image Processing</div>
+                        <div class="comp">RapidAPI Proxy</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arrow -->
+        <div class="arrow-row">
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">Supabase JS SDK</span> <span class="arr">&#8593;</span></div>
+            <div class="arrow-line"><span class="arr">&#8595;</span> <span class="arr-label">Axios HTTP</span> <span class="arr">&#8593;</span></div>
+            <span class="pattern-tag">External Services</span>
+        </div>
+
+        <!-- ======== LAYER 6: EXTERNAL SERVICES ======== -->
+        <div class="layer-row l-external">
+            <div class="layer-label">External Services</div>
+            <div class="layer-content">
+                <div class="comp-group">
+                    <div class="comp-group-title">Supabase Cloud</div>
+                    <div class="comp-items">
+                        <div class="comp">PostgreSQL Database</div>
+                        <div class="comp">Auth (JWT + OAuth)</div>
+                        <div class="comp">Storage (Profiles & Product Images)</div>
+                        <div class="comp">Row Level Security (RLS)</div>
+                        <div class="comp">Realtime</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">RapidAPI</div>
+                    <div class="comp-items">
+                        <div class="comp">Try-On Diffusion API</div>
+                        <div class="comp">/try-on-file (File Upload)</div>
+                        <div class="comp">/try-on-url (URL Based)</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Snap Inc.</div>
+                    <div class="comp-items">
+                        <div class="comp">Camera Kit SDK</div>
+                        <div class="comp">AR Lenses</div>
+                        <div class="comp">JWT Token Auth</div>
+                    </div>
+                </div>
+                <div class="comp-group">
+                    <div class="comp-group-title">Google</div>
+                    <div class="comp-items">
+                        <div class="comp">ARCore 1.41</div>
+                        <div class="comp">Sceneform 3D</div>
+                        <div class="comp">Google Sign-In (OAuth)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer / Legend -->
+    <div class="footer">
+        <div class="legend-item"><div class="legend-dot" style="background:#2980b9"></div>Presentation</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8e44ad"></div>ViewModel</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#27ae60"></div>Repository</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div>Data Sources</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c0392b"></div>Backend Server</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#16a085"></div>External Services</div>
+        <span style="color:#444; font-size:5.5px;">|</span>
+        <span style="font-size:5.5px; color:#556;">Architecture: MVVM + Repository Pattern + Client-Server &nbsp;|&nbsp; DI: Hilt 2.48 &nbsp;|&nbsp; Async: Kotlin Coroutines + Flow</span>
+    </div>
+</body>
+</html>

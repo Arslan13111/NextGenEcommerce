@@ -2,8 +2,10 @@ package com.example.nextgenecommerce.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -15,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,96 +32,116 @@ fun ProductCard(
     isFavorite: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onProductClick(product) },
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 0.dp
-        ),
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onProductClick(product) }
     ) {
-        Column(
+        // Product Image with badges
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .aspectRatio(0.75f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            // Product Image with Favorite Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                AsyncImage(
-                    model = product.images.firstOrNull(),
-                    contentDescription = product.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+            val imageUrl = product.images.firstOrNull()
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = product.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
 
-                // Favorite Button
-                IconButton(
-                    onClick = { onFavoriteClick(product) },
+            // "New" badge — top left
+            if (product.isNew || product.originalPrice > product.price) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(32.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                            shape = CircleShape
-                        )
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White)
+                        .padding(horizontal = 7.dp, vertical = 3.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = if (product.isNew) "New" else "-${((1 - product.price / product.originalPrice) * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.Black,
+                        fontSize = 10.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Favorite button — top right
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.9f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onFavoriteClick(product) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    tint = if (isFavorite) Color.Red else Color.Black,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
 
-            // Product Name
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Product Name
+        Text(
+            text = product.name,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 13.sp,
+            lineHeight = 17.sp
+        )
+
+        // Brand name
+        if (product.brand.isNotEmpty()) {
             Text(
-                text = product.name,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
+                text = product.brand,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
 
-            Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-            // Product Description
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                text = product.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 12.sp
+                text = "PKR ${product.price.toInt()}",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 14.sp
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Price
-            Text(
-                text = "$${product.price}",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            if (product.originalPrice > product.price) {
+                Text(
+                    text = "PKR ${product.originalPrice.toInt()}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        textDecoration = TextDecoration.LineThrough
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp
+                )
+            }
         }
     }
 }

@@ -46,6 +46,57 @@ fun LiveCameraTryOnView(
         }
     }
 
+    // Camera binding effect
+    val previewView = remember { PreviewView(context) }
+
+    LaunchedEffect(isFrontCamera) {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+
+        cameraProviderFuture.addListener({
+            try {
+                val cameraProvider = cameraProviderFuture.get()
+
+                val preview = Preview.Builder()
+                    .build()
+                    .also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+
+                val imageAnalyzer = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build()
+                    .also { analysis ->
+                        analysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                            // Process frame for AR try-on
+                            // TODO: Implement real-time AR processing
+                            processFrameForTryOn(imageProxy, productImageUrl)
+                            imageProxy.close()
+                        }
+                    }
+
+                val cameraSelector = if (isFrontCamera) {
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+                } else {
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                }
+
+                try {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        preview,
+                        imageAnalyzer
+                    )
+                } catch (exc: Exception) {
+                    Log.e("CameraX", "Use case binding failed", exc)
+                }
+            } catch (exc: Exception) {
+                Log.e("CameraX", "Camera provider initialization failed", exc)
+            }
+        }, ContextCompat.getMainExecutor(context))
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -53,56 +104,7 @@ fun LiveCameraTryOnView(
     ) {
         // Camera Preview
         AndroidView(
-            factory = { ctx ->
-                val previewView = PreviewView(ctx)
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-
-                cameraProviderFuture.addListener({
-                    try {
-                        val cameraProvider = cameraProviderFuture.get()
-
-                        val preview = Preview.Builder()
-                            .build()
-                            .also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
-                            }
-
-                        val imageAnalyzer = ImageAnalysis.Builder()
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .build()
-                            .also { analysis ->
-                                analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                                    // Process frame for AR try-on
-                                    // TODO: Implement real-time AR processing
-                                    processFrameForTryOn(imageProxy, productImageUrl)
-                                    imageProxy.close()
-                                }
-                            }
-
-                        val cameraSelector = if (isFrontCamera) {
-                            CameraSelector.DEFAULT_FRONT_CAMERA
-                        } else {
-                            CameraSelector.DEFAULT_BACK_CAMERA
-                        }
-
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                cameraSelector,
-                                preview,
-                                imageAnalyzer
-                            )
-                        } catch (exc: Exception) {
-                            Log.e("CameraX", "Use case binding failed", exc)
-                        }
-                    } catch (exc: Exception) {
-                        Log.e("CameraX", "Camera provider initialization failed", exc)
-                    }
-                }, ContextCompat.getMainExecutor(ctx))
-
-                previewView
-            },
+            factory = { previewView },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -148,20 +150,7 @@ fun LiveCameraTryOnView(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
 
-                IconButton(
-                    onClick = { isFrontCamera = !isFrontCamera },
-                    modifier = Modifier
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            CircleShape
-                        )
-                ) {
-                    Icon(
-                        Icons.Default.FlipCameraAndroid,
-                        contentDescription = "Flip Camera",
-                        tint = Color.White
-                    )
-                }
+                Spacer(modifier = Modifier.size(48.dp)) // Placeholder for symmetry
             }
 
             // Bottom Bar with Controls
@@ -185,30 +174,31 @@ fun LiveCameraTryOnView(
                     )
                 }
 
-                // Capture Button
+                // Control Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Gallery Button
+                    // Flip Camera Button - Left aligned
                     IconButton(
-                        onClick = { /* Switch to gallery */ },
+                        onClick = { isFrontCamera = !isFrontCamera },
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(52.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.5f),
+                                Color.White,
                                 CircleShape
                             )
                     ) {
                         Icon(
-                            Icons.Default.PhotoLibrary,
-                            contentDescription = "Gallery",
-                            tint = Color.White
+                            Icons.Default.FlipCameraAndroid,
+                            contentDescription = "Flip Camera",
+                            tint = Color.Black,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
-                    // Capture Button
+                    // Capture Button - Center
                     IconButton(
                         onClick = {
                             isCapturing = true
@@ -238,7 +228,7 @@ fun LiveCameraTryOnView(
                         }
                     }
 
-                    // Settings Button
+                    // Settings Button - Right
                     IconButton(
                         onClick = { /* Open settings */ },
                         modifier = Modifier

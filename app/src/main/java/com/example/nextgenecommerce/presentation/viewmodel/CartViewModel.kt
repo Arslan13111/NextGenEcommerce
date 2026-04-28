@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextgenecommerce.data.models.CartItem
 import com.example.nextgenecommerce.data.repository.CartRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.jan.supabase.gotrue.Auth
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +15,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class CartViewModel @Inject constructor(
-    private val cartRepository: CartRepository
+    private val cartRepository: CartRepository,
+    private val supabaseAuth: Auth
 ) : ViewModel() {
 
     private val _cartItems = MutableStateFlow<List<CartItem>>(emptyList())
@@ -25,33 +28,98 @@ class CartViewModel @Inject constructor(
     private val _cartTotal = MutableStateFlow(0.0)
     val cartTotal: StateFlow<Double> = _cartTotal.asStateFlow()
 
-    init {
-        loadCartItems()
-        loadCartItemCount()
-        loadCartTotal()
+    /** Items the user selected on the Cart screen to check out (subset of cartItems). */
+    private val _checkoutItems = MutableStateFlow<List<CartItem>>(emptyList())
+    val checkoutItems: StateFlow<List<CartItem>> = _checkoutItems.asStateFlow()
+
+    fun setCheckoutItems(items: List<CartItem>) {
+        _checkoutItems.value = items
     }
 
-    private fun loadCartItems() {
+    /** Removes only the items that were ordered, then clears the checkout snapshot. */
+    fun removeCheckoutItemsFromCart() {
+        val ordered = _checkoutItems.value
         viewModelScope.launch {
-            cartRepository.getAllCartItems().collect {
+            ordered.forEach { item -> cartRepository.removeFromCart(item) }
+            _checkoutItems.value = emptyList()
+        }
+    }
+
+    private val currentUserId: String
+        get() = supabaseAuth.currentUserOrNull()?.id ?: "guest"
+
+    /** Tracks which userId the Flow collectors are currently observing */
+    private var loadedUserId: String? = null
+
+    private var itemsJob: Job? = null
+    private var countJob: Job? = null
+    private var totalJob: Job? = null
+
+    init {
+        loadCartData()
+        if (supabaseAuth.currentUserOrNull() != null) {
+            viewModelScope.launch {
+                cartRepository.syncCartFromSupabase().collect { }
+            }
+        }
+    }
+
+    /**
+     * Called when the cart screen becomes visible.
+     * Checks if the current auth user differs from the loaded user
+     * and reloads data if needed. This handles cases where the
+     * ViewModel is restored from saved nav state after a user switch.
+     */
+    fun refreshIfNeeded() {
+        val userId = currentUserId
+        if (userId != loadedUserId) {
+            loadCartData()
+            if (userId != "guest") {
+                viewModelScope.launch {
+                    cartRepository.syncCartFromSupabase().collect { }
+                }
+            }
+        }
+    }
+
+    private fun loadCartData() {
+        val userId = currentUserId
+        loadedUserId = userId
+
+        itemsJob?.cancel()
+        countJob?.cancel()
+        totalJob?.cancel()
+
+        itemsJob = viewModelScope.launch {
+            cartRepository.getCartItemsByUser(userId).collect {
                 _cartItems.value = it
             }
         }
-    }
-
-    private fun loadCartItemCount() {
-        viewModelScope.launch {
-            cartRepository.getCartItemCount().collect {
+        countJob = viewModelScope.launch {
+            cartRepository.getCartItemCount(userId).collect {
                 _cartItemCount.value = it
+            }
+        }
+        totalJob = viewModelScope.launch {
+            cartRepository.getCartTotal(userId).collect {
+                _cartTotal.value = it ?: 0.0
             }
         }
     }
 
-    private fun loadCartTotal() {
+    fun onUserLogin() {
         viewModelScope.launch {
-            cartRepository.getCartTotal().collect {
-                _cartTotal.value = it ?: 0.0
-            }
+            cartRepository.mergeGuestCartToUser().collect { }
+            cartRepository.syncCartFromSupabase().collect { }
+            loadCartData()
+        }
+    }
+
+    fun onUserLogout() {
+        val userId = currentUserId
+        viewModelScope.launch {
+            cartRepository.clearLocalUserCart(userId)
+            loadCartData()
         }
     }
 
@@ -79,7 +147,7 @@ class CartViewModel @Inject constructor(
         }
     }
 
-    fun getTaxAmount(): Double = _cartTotal.value * 0.08 // 8% tax
+    fun getTaxAmount(): Double = _cartTotal.value * 0.08
 
     fun getShippingAmount(): Double = if (_cartTotal.value > 50) 0.0 else 5.99
 

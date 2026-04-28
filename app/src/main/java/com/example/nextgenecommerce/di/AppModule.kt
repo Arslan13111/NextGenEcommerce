@@ -1,13 +1,23 @@
 package com.example.nextgenecommerce.di
 
 import android.content.Context
+import com.example.nextgenecommerce.api.SafepayApiService
+import com.example.nextgenecommerce.api.SafepayClient
+import com.example.nextgenecommerce.api.TryonaApiService
+import com.example.nextgenecommerce.api.TryonaClient
+import com.example.nextgenecommerce.data.config.SupabaseConfig
 import com.example.nextgenecommerce.data.local.AppDatabase
 import com.example.nextgenecommerce.data.local.PreferencesManager
 import com.example.nextgenecommerce.data.local.dao.*
 import com.example.nextgenecommerce.data.remote.ApiService
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.example.nextgenecommerce.repository.TryOnRepository
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.storage.storage
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -62,6 +72,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideNotificationDao(database: AppDatabase): NotificationDao {
+        return database.notificationDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAddressDao(database: AppDatabase): AddressDao {
+        return database.addressDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
@@ -93,25 +115,57 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseAuth(): FirebaseAuth {
-        return FirebaseAuth.getInstance()
+    fun provideSupabaseClient(): SupabaseClient {
+        return SupabaseConfig.client
     }
 
     @Provides
     @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore {
-        return FirebaseFirestore.getInstance()
+    fun provideSupabaseAuth(client: SupabaseClient): Auth {
+        return client.auth
     }
 
     @Provides
     @Singleton
-    fun provideFirebaseStorage(): FirebaseStorage {
-        return FirebaseStorage.getInstance()
+    fun provideSupabaseDatabase(client: SupabaseClient): Postgrest {
+        return client.postgrest
+    }
+
+    @Provides
+    @Singleton
+    fun provideSupabaseStorage(client: SupabaseClient): Storage {
+        return client.storage
+    }
+
+    @Provides
+    @Singleton
+    fun provideApplicationContext(@ApplicationContext context: Context): Context {
+        return context
     }
 
     @Provides
     @Singleton
     fun providePreferencesManager(@ApplicationContext context: Context): PreferencesManager {
         return PreferencesManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideTryonaApiService(): TryonaApiService {
+        return TryonaClient.apiService
+    }
+
+    @Provides
+    @Singleton
+    fun provideSafepayApiService(): SafepayApiService {
+        return SafepayClient.apiService
+    }
+
+    @Provides
+    @Singleton
+    fun provideTryOnRepository(
+        tryonaApiService: TryonaApiService
+    ): TryOnRepository {
+        return TryOnRepository(tryonaApiService)
     }
 }

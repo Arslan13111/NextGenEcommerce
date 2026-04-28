@@ -14,7 +14,10 @@ class Converters {
     }
 
     @TypeConverter
-    fun toStringList(value: String): List<String> {
+    fun toStringList(value: String?): List<String> {
+        if (value.isNullOrEmpty()) {
+            return emptyList()
+        }
         val listType = object : TypeToken<List<String>>() {}.type
         return gson.fromJson(value, listType)
     }
@@ -69,5 +72,37 @@ class Converters {
     @TypeConverter
     fun toPaymentStatus(value: String): PaymentStatus {
         return PaymentStatus.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromPaymentMethod(value: PaymentMethod): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toPaymentMethod(value: String): PaymentMethod {
+        return PaymentMethod.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromNotificationType(value: NotificationType): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toNotificationType(value: String): NotificationType {
+        return NotificationType.valueOf(value)
+    }
+
+    @TypeConverter
+    fun fromStringMap(value: Map<String, String>?): String {
+        return gson.toJson(value ?: emptyMap<String, String>())
+    }
+
+    @TypeConverter
+    fun toStringMap(value: String?): Map<String, String> {
+        if (value.isNullOrEmpty()) return emptyMap()
+        val mapType = object : TypeToken<Map<String, String>>() {}.type
+        return gson.fromJson(value, mapType) ?: emptyMap()
     }
 }

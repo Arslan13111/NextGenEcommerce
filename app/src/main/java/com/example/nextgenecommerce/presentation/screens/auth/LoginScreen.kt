@@ -1,11 +1,19 @@
 package com.example.nextgenecommerce.presentation.screens.auth
 
+import android.app.Activity
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -14,6 +22,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -21,17 +34,23 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.nextgenecommerce.R
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.theme.GradientEnd
 import com.example.nextgenecommerce.presentation.theme.GradientStart
 import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
 import com.example.nextgenecommerce.util.Resource
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     navController: NavController,
-    viewModel: AuthViewModel = hiltViewModel()
+    viewModel: AuthViewModel = hiltViewModel(),
+    cartViewModel: CartViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -39,18 +58,80 @@ fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Google Sign-In setup
+    val context = LocalContext.current
+    val googleSignInClient = remember {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken("601314722995-6bbptts1f4oelm82lko3q594pa3ip308.apps.googleusercontent.com")
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken != null) {
+                viewModel.loginWithGoogle(idToken)
+            } else {
+                errorMessage = "Google Sign-In failed: No ID token received"
+            }
+        } catch (e: ApiException) {
+            Log.e("LoginScreen", "Google Sign-In failed: statusCode=${e.statusCode}", e)
+            if (e.statusCode != 12501) { // 12501 = user cancelled
+                errorMessage = "Google Sign-In failed: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    // Clear error when user changes input
+    LaunchedEffect(email, password) {
+        if (errorMessage != null && !isLoading) {
+            errorMessage = null
+        }
+    }
+
     val authState by viewModel.authState.collectAsState()
+
+    // Helper function to format error messages
+    fun formatErrorMessage(error: String?): String {
+        if (error == null) return "An error occurred"
+
+        return when {
+            error.contains("Invalid login credentials", ignoreCase = true) ||
+            error.contains("wrong password", ignoreCase = true) ||
+            error.contains("incorrect", ignoreCase = true) ->
+                "Invalid email or password. Please try again."
+            error.contains("Email not confirmed", ignoreCase = true) ->
+                "Please confirm your email before logging in. Check your inbox."
+            error.contains("Too many requests", ignoreCase = true) ->
+                "Too many login attempts. Please try again later."
+            error.contains("User not found", ignoreCase = true) ->
+                "No account found with this email. Please register."
+            error.contains("network", ignoreCase = true) || error.contains("connection", ignoreCase = true) ->
+                "Network error. Please check your internet connection."
+            error.length > 100 ->
+                error.substring(0, 97) + "..."
+            else -> error
+        }
+    }
 
     LaunchedEffect(authState) {
         when (authState) {
             is Resource.Success -> {
+                cartViewModel.onUserLogin()
                 navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Login.route) { inclusive = true }
+                    popUpTo(0) { inclusive = true }
                 }
             }
             is Resource.Error -> {
                 isLoading = false
-                errorMessage = (authState as Resource.Error).message
+                val rawError = (authState as Resource.Error).message
+                errorMessage = formatErrorMessage(rawError)
             }
             is Resource.Loading -> {
                 isLoading = true
@@ -70,10 +151,23 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Logo
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "NextGen Logo",
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Logo/Title
             Text(
                 text = "Welcome Back",
@@ -132,11 +226,32 @@ fun LoginScreen(
 
             if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = "Error",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = errorMessage!!,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -182,6 +297,73 @@ fun LoginScreen(
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // "Or" divider
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Divider(modifier = Modifier.weight(1f))
+                Text(
+                    text = "  or  ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Divider(modifier = Modifier.weight(1f))
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Google Sign-In Button
+            OutlinedButton(
+                onClick = {
+                    googleSignInClient.signOut().addOnCompleteListener {
+                        googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = !isLoading
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_google),
+                    contentDescription = "Google",
+                    modifier = Modifier.size(24.dp),
+                    tint = androidx.compose.ui.graphics.Color.Unspecified
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign in with Google", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Admin Login Link simplified and made more visible
+            Row(
+                modifier = Modifier
+                    .clickable { navController.navigate(Screen.AdminLogin.route) }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Default.AdminPanelSettings,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Administrator Login",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

@@ -1,19 +1,30 @@
 package com.example.nextgenecommerce.data.repository
 
+import android.util.Log
 import com.example.nextgenecommerce.data.local.dao.ProductDao
 import com.example.nextgenecommerce.data.models.ProductEntity
+import com.example.nextgenecommerce.data.models.SupabaseProduct
 import com.example.nextgenecommerce.data.remote.ApiService
 import com.example.nextgenecommerce.util.Resource
+import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ProductRepository @Inject constructor(
     private val apiService: ApiService,
-    private val productDao: ProductDao
+    private val productDao: ProductDao,
+    private val postgrest: Postgrest
 ) {
+
+    companion object {
+        private const val TAG = "ProductRepository"
+        private const val PRODUCTS_TABLE = "products"
+    }
 
     fun getAllProducts(): Flow<List<ProductEntity>> = productDao.getAllProducts()
 
@@ -62,175 +73,248 @@ class ProductRepository @Inject constructor(
         }
     }
 
-    suspend fun insertSampleProducts() {
-        val sampleProducts = getSampleProducts()
-        productDao.insertProducts(sampleProducts)
+    suspend fun insertProduct(product: ProductEntity) {
+        productDao.insertProduct(product)
     }
 
-    private fun getSampleProducts(): List<ProductEntity> {
-        return listOf(
-            ProductEntity(
-                id = "1",
-                name = "Classic Black T-Shirt",
-                description = "Premium cotton t-shirt with modern fit. Perfect for casual wear.",
-                price = 29.99,
-                originalPrice = 39.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "T-Shirts",
-                images = listOf("https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400"),
-                localImageName = "casual_tshirt.jpeg",
-                sizes = listOf("XS", "S", "M", "L", "XL", "XXL"),
-                colors = listOf("Black", "White", "Gray", "Navy"),
-                rating = 4.5,
-                reviewCount = 156,
-                stock = 50,
-                isFeatured = true,
-                isNew = false,
-                tags = listOf("casual", "cotton", "basic"),
-                brand = "NextGen Fashion"
-            ),
-            ProductEntity(
-                id = "2",
-                name = "Summer Floral Dress",
-                description = "Light and breezy summer dress with beautiful floral print. Perfect for warm weather.",
-                price = 59.99,
-                originalPrice = 79.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "Dresses",
-                images = listOf("https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400"),
-                localImageName = "summer_dress.jpg",
-                sizes = listOf("XS", "S", "M", "L", "XL"),
-                colors = listOf("Floral Blue", "Floral Pink", "Floral Yellow"),
-                rating = 4.8,
-                reviewCount = 203,
-                stock = 30,
-                isFeatured = true,
-                isNew = true,
-                tags = listOf("summer", "dress", "floral"),
-                brand = "NextGen Fashion"
-            ),
-            ProductEntity(
-                id = "3",
-                name = "Denim Jacket",
-                description = "Classic denim jacket with modern fit. A timeless wardrobe essential.",
-                price = 79.99,
-                originalPrice = 99.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "Jackets",
-                images = listOf("https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400"),
-                localImageName = "denim_jacket.jpeg",
-                sizes = listOf("S", "M", "L", "XL", "XXL"),
-                colors = listOf("Light Blue", "Dark Blue", "Black"),
-                rating = 4.6,
-                reviewCount = 98,
-                stock = 25,
-                isFeatured = false,
-                isNew = false,
-                tags = listOf("denim", "jacket", "casual"),
-                brand = "NextGen Fashion"
-            ),
-            ProductEntity(
-                id = "4",
-                name = "Formal White Shirt",
-                description = "Crisp white formal shirt perfect for professional settings. Non-iron fabric.",
-                price = 45.99,
-                originalPrice = 59.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "Shirts",
-                images = listOf("https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=400"),
-                localImageName = "formal_shirt.jpg",
-                sizes = listOf("S", "M", "L", "XL", "XXL"),
-                colors = listOf("White", "Light Blue", "Pink"),
-                rating = 4.7,
-                reviewCount = 145,
-                stock = 40,
-                isFeatured = false,
-                isNew = false,
-                tags = listOf("formal", "shirt", "office"),
-                brand = "NextGen Fashion"
-            ),
-            ProductEntity(
-                id = "5",
-                name = "Premium Leather Jacket",
-                description = "Genuine leather jacket with modern design. Premium quality construction.",
-                price = 149.99,
-                originalPrice = 199.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "Jackets",
-                images = listOf("https://images.unsplash.com/photo-1520975954732-35dd22299614?w=400"),
-                localImageName = "leather_jacket.jpg",
-                sizes = listOf("S", "M", "L", "XL"),
-                colors = listOf("Black", "Brown", "Tan"),
-                rating = 4.9,
-                reviewCount = 312,
-                stock = 15,
-                isFeatured = true,
-                isNew = true,
-                tags = listOf("leather", "jacket", "premium"),
-                brand = "NextGen Premium"
-            ),
-            ProductEntity(
-                id = "6",
-                name = "Elegant Maxi Dress",
-                description = "Flowing maxi dress with elegant floral pattern. Perfect for special occasions.",
-                price = 69.99,
-                originalPrice = 89.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.CLOTHING,
-                subCategory = "Dresses",
-                images = listOf("https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400"),
-                localImageName = "floral_maxi_dress.jpg",
-                sizes = listOf("XS", "S", "M", "L", "XL"),
-                colors = listOf("Navy Floral", "Red Floral", "Green Floral"),
-                rating = 4.7,
-                reviewCount = 178,
-                stock = 20,
-                isFeatured = true,
-                isNew = false,
-                tags = listOf("maxi", "dress", "elegant"),
-                brand = "NextGen Fashion"
-            ),
-            ProductEntity(
-                id = "7",
-                name = "Modern Sofa Set",
-                description = "Comfortable 3-seater sofa with premium fabric. AR preview available.",
-                price = 899.99,
-                originalPrice = 1299.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.FURNITURE,
-                subCategory = "Sofas",
-                images = listOf("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400"),
-                arModelUrl = "models/sofa_modern.glb",
-                localImageName = "modern_sofa.jpg",
-                sizes = listOf("Standard"),
-                colors = listOf("Gray", "Beige", "Navy"),
-                rating = 4.8,
-                reviewCount = 89,
-                stock = 10,
-                isFeatured = true,
-                isNew = true,
-                tags = listOf("furniture", "sofa", "modern"),
-                brand = "NextGen Home"
-            ),
-            ProductEntity(
-                id = "8",
-                name = "Wooden Coffee Table",
-                description = "Handcrafted wooden coffee table with storage. AR preview available.",
-                price = 249.99,
-                originalPrice = 349.99,
-                category = com.example.nextgenecommerce.data.models.ProductCategory.FURNITURE,
-                subCategory = "Tables",
-                images = listOf("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400"),
-                arModelUrl = "models/coffee_table.glb",
-                localImageName = "coffee_table.jpg",
-                sizes = listOf("Standard"),
-                colors = listOf("Oak", "Walnut", "White"),
-                rating = 4.6,
-                reviewCount = 67,
-                stock = 15,
-                isFeatured = false,
-                isNew = false,
-                tags = listOf("furniture", "table", "wooden"),
-                brand = "NextGen Home"
-            )
-        )
+    suspend fun updateProduct(product: ProductEntity) {
+        productDao.insertProduct(product) // Room's @Insert with OnConflictStrategy.REPLACE will update
+    }
+
+    suspend fun deleteProduct(product: ProductEntity) {
+        productDao.deleteProduct(product)
+    }
+
+    suspend fun deleteProductById(productId: String) {
+        getProductById(productId).collect { product ->
+            product?.let { deleteProduct(it) }
+        }
+    }
+
+    /**
+     * Sync products from Supabase to Room database
+     * Fetches all products from Supabase and stores them locally
+     */
+    suspend fun syncProductsFromSupabase(): Flow<Resource<List<ProductEntity>>> = flow {
+        emit(Resource.Loading())
+        try {
+            Log.d(TAG, "Starting Supabase product sync...")
+
+            val supabaseProducts = postgrest.from(PRODUCTS_TABLE)
+                .select()
+                .decodeList<SupabaseProduct>()
+
+            Log.d(TAG, "Fetched ${supabaseProducts.size} products from Supabase")
+
+            if (supabaseProducts.isEmpty()) {
+                Log.d(TAG, "Supabase returned empty list, keeping local cache")
+                emit(Resource.Success(emptyList()))
+                return@flow
+            }
+
+            // Convert to Room entities
+            val productEntities = supabaseProducts.map { it.toEntity() }
+
+            // Upsert — never wipe the cache first (causes empty-list flash in UI)
+            productDao.insertProducts(productEntities)
+
+            Log.d(TAG, "Saved ${productEntities.size} products to Room database")
+            emit(Resource.Success(productEntities))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing products from Supabase", e)
+            emit(Resource.Error(e.message ?: "Failed to sync products from Supabase"))
+        }
+    }
+
+    /**
+     * Fetch a single product from Supabase by ID
+     */
+    suspend fun fetchProductFromSupabase(productId: String): Flow<Resource<ProductEntity>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProduct = postgrest.from(PRODUCTS_TABLE)
+                .select {
+                    filter { eq("id", productId) }
+                }
+                .decodeSingleOrNull<SupabaseProduct>()
+
+            if (supabaseProduct != null) {
+                val entity = supabaseProduct.toEntity()
+                productDao.insertProduct(entity)
+                emit(Resource.Success(entity))
+            } else {
+                emit(Resource.Error("Product not found"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching product from Supabase", e)
+            emit(Resource.Error(e.message ?: "Failed to fetch product"))
+        }
+    }
+
+    /**
+     * Fetch featured products from Supabase
+     */
+    suspend fun syncFeaturedProductsFromSupabase(): Flow<Resource<List<ProductEntity>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProducts = postgrest.from(PRODUCTS_TABLE)
+                .select {
+                    filter { eq("is_featured", true) }
+                }
+                .decodeList<SupabaseProduct>()
+
+            val productEntities = supabaseProducts.map { it.toEntity() }
+            productDao.insertProducts(productEntities)
+            emit(Resource.Success(productEntities))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing featured products", e)
+            emit(Resource.Error(e.message ?: "Failed to sync featured products"))
+        }
+    }
+
+    /**
+     * Fetch new products from Supabase
+     */
+    suspend fun syncNewProductsFromSupabase(): Flow<Resource<List<ProductEntity>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProducts = postgrest.from(PRODUCTS_TABLE)
+                .select {
+                    filter { eq("is_new", true) }
+                }
+                .decodeList<SupabaseProduct>()
+
+            val productEntities = supabaseProducts.map { it.toEntity() }
+            productDao.insertProducts(productEntities)
+            emit(Resource.Success(productEntities))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing new products", e)
+            emit(Resource.Error(e.message ?: "Failed to sync new products"))
+        }
+    }
+
+    /**
+     * Fetch products by category from Supabase
+     */
+    suspend fun syncProductsByCategoryFromSupabase(category: String): Flow<Resource<List<ProductEntity>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProducts = postgrest.from(PRODUCTS_TABLE)
+                .select {
+                    filter { eq("category", category) }
+                }
+                .decodeList<SupabaseProduct>()
+
+            val productEntities = supabaseProducts.map { it.toEntity() }
+            productDao.insertProducts(productEntities)
+            emit(Resource.Success(productEntities))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing products by category", e)
+            emit(Resource.Error(e.message ?: "Failed to sync products by category"))
+        }
+    }
+
+    // =====================================================
+    // ADMIN OPERATIONS - Supabase CRUD
+    // These operations require admin privileges (enforced by RLS)
+    // =====================================================
+
+    /**
+     * Add a new product to Supabase (Admin only)
+     * RLS policies will reject if user is not admin
+     */
+    suspend fun addProductToSupabase(product: ProductEntity): Flow<Resource<ProductEntity>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProduct = product.toSupabaseProduct()
+
+            Log.d(TAG, "Adding product to Supabase: ${product.name}")
+
+            postgrest.from(PRODUCTS_TABLE)
+                .insert(supabaseProduct)
+
+            // Also save to local database
+            productDao.insertProduct(product)
+
+            Log.d(TAG, "Product added successfully: ${product.id}")
+            emit(Resource.Success(product))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding product to Supabase", e)
+            val errorMessage = when {
+                e.message?.contains("policy", ignoreCase = true) == true ||
+                e.message?.contains("permission", ignoreCase = true) == true ||
+                e.message?.contains("denied", ignoreCase = true) == true ->
+                    "Access denied. Admin privileges required."
+                else -> e.message ?: "Failed to add product"
+            }
+            emit(Resource.Error(errorMessage))
+        }
+    }
+
+    /**
+     * Update an existing product in Supabase (Admin only)
+     * RLS policies will reject if user is not admin
+     */
+    suspend fun updateProductInSupabase(product: ProductEntity): Flow<Resource<ProductEntity>> = flow {
+        emit(Resource.Loading())
+        try {
+            val supabaseProduct = product.toSupabaseProduct()
+
+            Log.d(TAG, "Updating product in Supabase: ${product.id}")
+
+            postgrest.from(PRODUCTS_TABLE)
+                .update(supabaseProduct) {
+                    filter { eq("id", product.id) }
+                }
+
+            // Also update local database
+            productDao.insertProduct(product)
+
+            Log.d(TAG, "Product updated successfully: ${product.id}")
+            emit(Resource.Success(product))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating product in Supabase", e)
+            val errorMessage = when {
+                e.message?.contains("policy", ignoreCase = true) == true ||
+                e.message?.contains("permission", ignoreCase = true) == true ||
+                e.message?.contains("denied", ignoreCase = true) == true ->
+                    "Access denied. Admin privileges required."
+                else -> e.message ?: "Failed to update product"
+            }
+            emit(Resource.Error(errorMessage))
+        }
+    }
+
+    /**
+     * Delete a product from Supabase (Admin only)
+     * RLS policies will reject if user is not admin
+     */
+    suspend fun deleteProductFromSupabase(productId: String): Flow<Resource<Boolean>> = flow {
+        emit(Resource.Loading())
+        try {
+            Log.d(TAG, "Deleting product from Supabase: $productId")
+
+            postgrest.from(PRODUCTS_TABLE)
+                .delete {
+                    filter { eq("id", productId) }
+                }
+
+            // Also delete from local database
+            val product = productDao.getProductById(productId).first()
+            product?.let { productDao.deleteProduct(it) }
+
+            Log.d(TAG, "Product deleted successfully: $productId")
+            emit(Resource.Success(true))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting product from Supabase", e)
+            val errorMessage = when {
+                e.message?.contains("policy", ignoreCase = true) == true ||
+                e.message?.contains("permission", ignoreCase = true) == true ||
+                e.message?.contains("denied", ignoreCase = true) == true ->
+                    "Access denied. Admin privileges required."
+                else -> e.message ?: "Failed to delete product"
+            }
+            emit(Resource.Error(errorMessage))
+        }
     }
 }

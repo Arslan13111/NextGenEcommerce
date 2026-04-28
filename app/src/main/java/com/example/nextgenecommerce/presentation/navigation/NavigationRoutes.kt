@@ -1,11 +1,15 @@
 package com.example.nextgenecommerce.presentation.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String) {
@@ -23,6 +27,7 @@ sealed class Screen(val route: String) {
         fun createRoute(productId: String) = "product_detail/$productId"
     }
     object Search : Screen("search")
+    object AllProducts : Screen("all_products")
 
     // AR
     object ARViewer : Screen("ar_viewer/{productId}") {
@@ -46,18 +51,44 @@ sealed class Screen(val route: String) {
         fun createRoute(orderId: String) = "order_tracking/$orderId"
     }
 
+    // Notifications
+    object Notifications : Screen("notifications")
+
     // Profile
     object Profile : Screen("profile")
     object EditProfile : Screen("edit_profile")
+    object MyAccount : Screen("my_account")
+    object DeliveryTerms : Screen("delivery_terms")
+    object ProductReturn : Screen("product_return")
     object Addresses : Screen("addresses")
     object Settings : Screen("settings")
     object ChangePassword : Screen("change_password")
     object HelpCenter : Screen("help_center")
     object About : Screen("about")
+    object DiscountCard : Screen("discount_card")
+
+    // Payment
+    object SafepayCheckout : Screen("safepay_checkout/{orderId}/{amount}") {
+        fun createRoute(orderId: String, amount: String) = "safepay_checkout/$orderId/$amount"
+    }
+
+    // Order Success
+    object OrderSuccess : Screen("order_success/{orderId}") {
+        fun createRoute(orderId: String) = "order_success/$orderId"
+    }
 
     // Admin
+    object AdminLogin : Screen("admin_login")
     object AdminDashboard : Screen("admin_dashboard")
-    object AddProduct : Screen("add_product")
+    object RevenueDetail : Screen("revenue_detail")
+    object SalesDetail : Screen("sales_detail")
+    object AddProduct : Screen("add_product?productId={productId}") {
+        fun createRoute(productId: String? = null) = if (productId != null) {
+            "add_product?productId=$productId"
+        } else {
+            "add_product"
+        }
+    }
 }
 
 sealed class BottomNavItem(
@@ -68,7 +99,13 @@ sealed class BottomNavItem(
     object Home : BottomNavItem(
         Screen.Home.route,
         "Home",
-        Icons.Filled.Home
+        Icons.Outlined.Home
+    )
+
+    object Wishlist : BottomNavItem(
+        Screen.Wishlist.route,
+        "Saved",
+        Icons.Outlined.FavoriteBorder
     )
 
     object Search : BottomNavItem(
@@ -80,18 +117,12 @@ sealed class BottomNavItem(
     object Cart : BottomNavItem(
         Screen.Cart.route,
         "Cart",
-        Icons.Filled.ShoppingCart
-    )
-
-    object Orders : BottomNavItem(
-        Screen.Orders.route,
-        "Orders",
-        Icons.Filled.Receipt
+        Icons.Outlined.ShoppingCart
     )
 
     object Profile : BottomNavItem(
         Screen.Profile.route,
         "Profile",
-        Icons.Filled.Person
+        Icons.Outlined.Person
     )
 }
