@@ -16,12 +16,17 @@ class ProductDetailActivity : AppCompatActivity() {
     private lateinit var product: Product
     private var selectedSize: String = "M"
     private var selectedColor: String = "Black"
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.activity_product_detail)
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_product_detail)
-
-        product = intent.getSerializableExtra("product") as Product
+    // Get product data
+    @Suppress("DEPRECATION")
+    product = (if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        intent.getSerializableExtra("product", Product::class.java)
+    } else {
+        intent.getSerializableExtra("product") as? Product
+    })!!
 
         supportActionBar?.title = product.name
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -77,7 +82,7 @@ class ProductDetailActivity : AppCompatActivity() {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        onBackPressedDispatcher.onBackPressed()
         return true
     }
 }
