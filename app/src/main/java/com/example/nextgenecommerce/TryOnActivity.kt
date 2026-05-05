@@ -14,19 +14,18 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.nextgenecommerce.api.TryOnDiffusionClient
+import com.bumptech.glide.Glide
 import com.example.nextgenecommerce.models.Product
 import com.example.nextgenecommerce.models.TryOnState
-import com.example.nextgenecommerce.repository.TryOnRepository
 import com.example.nextgenecommerce.viewmodel.TryOnViewModel
-import com.example.nextgenecommerce.viewmodel.TryOnViewModelFactory
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /**
@@ -39,12 +38,13 @@ import kotlinx.coroutines.launch
  * - Lifecycle-aware state observation
  * - Clean separation of concerns
  */
+@AndroidEntryPoint
 class TryOnActivity : AppCompatActivity() {
 
     private val TAG = "TryOnActivity"
 
     // ViewModel
-    private lateinit var viewModel: TryOnViewModel
+    private val viewModel: TryOnViewModel by viewModels()
 
     // Product data from intent
     private lateinit var product: Product
@@ -123,16 +123,18 @@ class TryOnActivity : AppCompatActivity() {
         setContentView(R.layout.activity_try_on)
 
         // Get product data from intent
-        product = intent.getSerializableExtra("product") as Product
+        @Suppress("DEPRECATION")
+        product = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra("product", Product::class.java)
+        } else {
+            intent.getSerializableExtra("product") as? Product
+        })!!
         selectedSize = intent.getStringExtra("selectedSize") ?: "M"
         selectedColor = intent.getStringExtra("selectedColor") ?: "Black"
 
         // Setup action bar
         supportActionBar?.title = "Try On - ${product.name}"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
-
-        // Initialize ViewModel
-        setupViewModel()
 
         // Initialize UI
         setupViews()
@@ -142,24 +144,6 @@ class TryOnActivity : AppCompatActivity() {
 
         // Load product image automatically
         loadProductImage()
-    }
-
-    /**
-     * Initialize ViewModel with dependencies
-     */
-    private fun setupViewModel() {
-        // Create repository
-        val repository = TryOnRepository(
-            apiService = TryOnDiffusionClient.apiService,
-            apiKey = TryOnDiffusionClient.RAPID_API_KEY,
-            apiHost = TryOnDiffusionClient.RAPID_API_HOST
-        )
-
-        // Create ViewModel using factory
-        val factory = TryOnViewModelFactory(repository)
-        viewModel = ViewModelProvider(this, factory)[TryOnViewModel::class.java]
-
-        android.util.Log.d(TAG, "ViewModel initialized")
     }
 
     /**
@@ -178,12 +162,10 @@ class TryOnActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         txtStatus = findViewById(R.id.txtStatus)
 
-        // Setup click listeners
-        btnSelectClothing.setOnClickListener {
-            isSelectingClothing = true
-            checkPermissionAndPickImage()
-        }
+        // Hide select clothing button as it now comes from URL
+        btnSelectClothing.isVisible = false
 
+        // Setup click listeners
         btnSelectAvatar.setOnClickListener {
             isSelectingClothing = false
             checkPermissionAndPickImage()
@@ -219,12 +201,14 @@ class TryOnActivity : AppCompatActivity() {
             }
         }
 
-        // Observe clothing bitmap
+        // Observe product image URL
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.clothingBitmap.collect { bitmap ->
-                    bitmap?.let {
-                        imgClothing.setImageBitmap(it)
+                viewModel.productImageUrl.collect { url ->
+                    if (!url.isNullOrEmpty()) {
+                        Glide.with(this@TryOnActivity)
+                            .load(url)
+                            .into(imgClothing)
                         updateTryOnButtonState()
                     }
                 }
@@ -312,11 +296,11 @@ class TryOnActivity : AppCompatActivity() {
     }
 
     /**
-     * Load product image from assets
+     * Load product image from URL
      */
     private fun loadProductImage() {
-        android.util.Log.d(TAG, "Loading product image: ${product.localImageName}")
-        viewModel.setClothingImageFromAssets(this, product.localImageName)
+        android.util.Log.d(TAG, "Loading product image from URL: ${product.imageUrl}")
+        viewModel.setProductImageUrl(product.imageUrl)
     }
 
     /**
@@ -395,10 +379,11 @@ class TryOnActivity : AppCompatActivity() {
         android.util.Log.d(TAG, "Image selected: $uri (clothing: $isSelectingClothing)")
 
         if (isSelectingClothing) {
-            viewModel.setClothingImage(this, uri)
-            Toast.makeText(this, "Clothing image selected", Toast.LENGTH_SHORT).show()
+            // This shouldn't be reachable since btnSelectClothing is hidden,
+            // but we'll keep it safe.
+            Toast.makeText(this, "Manual clothing selection not supported", Toast.LENGTH_SHORT).show()
         } else {
-            viewModel.setAvatarImage(this, uri)
+            viewModel.setAvatarFromUri(this, uri)
             // Show Try On button when avatar is uploaded
             btnTryOn.isVisible = true
             Toast.makeText(
@@ -415,7 +400,7 @@ class TryOnActivity : AppCompatActivity() {
     private fun handleCameraImage(bitmap: Bitmap) {
         android.util.Log.d(TAG, "Camera image captured: ${bitmap.width}x${bitmap.height}")
 
-        viewModel.setAvatarImage(bitmap)
+        viewModel.setAvatarFromBitmap(bitmap)
         // Show Try On button when photo is captured
         btnTryOn.isVisible = true
         Toast.makeText(
@@ -448,7 +433,7 @@ class TryOnActivity : AppCompatActivity() {
         if (!viewModel.isReadyToProcess()) {
             Toast.makeText(
                 this,
-                "Please select both clothing and avatar images",
+                "Please select your photo first",
                 Toast.LENGTH_SHORT
             ).show()
             return
@@ -456,16 +441,11 @@ class TryOnActivity : AppCompatActivity() {
 
         // Reset state and start processing
         viewModel.resetState()
-        viewModel.processTryOn(
-            context = this,
-            clothingPrompt = null, // Optional: can add UI for prompts
-            avatarSex = null,      // Optional: can add UI for gender selection
-            avatarPrompt = null
-        )
+        viewModel.processTryOn(context = this)
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        onBackPressedDispatcher.onBackPressed()
         return true
     }
 

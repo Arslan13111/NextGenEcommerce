@@ -33,6 +33,7 @@ import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
 import com.example.nextgenecommerce.util.Resource
+import com.example.nextgenecommerce.data.config.SupabaseConfig
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -115,7 +116,7 @@ fun RegisterScreen(
     val context = LocalContext.current
     val googleSignInClient = remember {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("601314722995-6bbptts1f4oelm82lko3q594pa3ip308.apps.googleusercontent.com")
+            .requestIdToken(SupabaseConfig.GOOGLE_WEB_CLIENT_ID)
             .requestEmail()
             .build()
         GoogleSignIn.getClient(context, gso)
@@ -136,8 +137,11 @@ fun RegisterScreen(
             }
         } catch (e: ApiException) {
             Log.e("RegisterScreen", "Google Sign-In failed: statusCode=${e.statusCode}", e)
-            if (e.statusCode != 12501) { // 12501 = user cancelled
-                errorMessage = "Google Sign-In failed: ${e.localizedMessage}"
+            errorMessage = when (e.statusCode) {
+                10 -> "Developer Error (10): This usually means your SHA-1 fingerprint is not registered in Google Cloud Console or the Web Client ID is incorrect. Check SupabaseConfig.kt for instructions."
+                7 -> "Network Error (7): Please check your internet connection."
+                12501 -> null // User cancelled
+                else -> "Google Sign-In failed: ${e.localizedMessage ?: "Status Code ${e.statusCode}"}"
             }
         }
     }
