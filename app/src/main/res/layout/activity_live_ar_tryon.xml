@@ -10,24 +10,26 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Top bar overlay -->
+    <!-- Top bar overlay: Close | Title | Flip Camera -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="16dp"
+        android:padding="12dp"
         android:background="#80000000">
 
+        <!-- Close button -->
         <ImageButton
             android:id="@+id/btn_close"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Close"
             android:tint="@android:color/white" />
 
+        <!-- Title -->
         <TextView
             android:id="@+id/tv_title"
             android:layout_width="0dp"
@@ -37,47 +39,20 @@
             android:textColor="@android:color/white"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:gravity="center"
-            android:layout_marginEnd="48dp" />
+            android:gravity="center" />
 
-    </LinearLayout>
+        <!-- Flip Camera button -->
+        <ImageButton
+            android:id="@+id/btn_flip_camera"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:background="@drawable/flip_camera_bg"
+            android:contentDescription="Flip Camera"
+            android:tint="@android:color/black"
+            android:elevation="4dp"
+            android:layout_marginEnd="10dp" />
 
-    <!-- Bottom controls overlay -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:orientation="horizontal"
-        android:gravity="start|center_vertical"
-        android:padding="24dp"
-        android:background="#80000000">
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-
-            <ImageButton
-                android:id="@+id/btn_flip_camera"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:src="@android:drawable/ic_menu_rotate"
-                android:background="@drawable/flip_camera_bg"
-                android:contentDescription="Flip Camera"
-                android:tint="@android:color/black"
-                android:elevation="4dp"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Flip Camera"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-        </LinearLayout>
 
     </LinearLayout>
 

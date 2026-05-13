@@ -335,8 +335,8 @@ private fun OrderCard(
 private fun getStatusColor(status: OrderStatus): androidx.compose.ui.graphics.Color {
     return when (status) {
         OrderStatus.PENDING, OrderStatus.CONFIRMED -> MaterialTheme.colorScheme.secondary
-        OrderStatus.PROCESSING -> MaterialTheme.colorScheme.tertiary
-        OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary
+        OrderStatus.PROCESSING, OrderStatus.PACKED -> MaterialTheme.colorScheme.tertiary
+        OrderStatus.READY_FOR_PICKUP, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary
         OrderStatus.DELIVERED -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
         OrderStatus.RETURN_REQUESTED -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
         OrderStatus.RETURNED -> androidx.compose.ui.graphics.Color(0xFF6D4C41)
@@ -349,6 +349,8 @@ private fun formatStatus(status: OrderStatus): String {
         OrderStatus.PENDING -> "Pending"
         OrderStatus.CONFIRMED -> "Confirmed"
         OrderStatus.PROCESSING -> "Processing"
+        OrderStatus.PACKED -> "Packed"
+        OrderStatus.READY_FOR_PICKUP -> "Ready for Pickup"
         OrderStatus.SHIPPED -> "Shipped"
         OrderStatus.OUT_FOR_DELIVERY -> "Out for Delivery"
         OrderStatus.DELIVERED -> "Delivered"

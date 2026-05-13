@@ -599,6 +599,8 @@ private fun OrderTrackingTimeline(status: OrderStatus) {
         OrderStatus.PENDING to "Order Placed",
         OrderStatus.CONFIRMED to "Confirmed",
         OrderStatus.PROCESSING to "Processing",
+        OrderStatus.PACKED to "Packed by Store",
+        OrderStatus.READY_FOR_PICKUP to "Ready for Pickup",
         OrderStatus.SHIPPED to "Shipped",
         OrderStatus.DELIVERED to "Delivered"
     )
@@ -607,10 +609,15 @@ private fun OrderTrackingTimeline(status: OrderStatus) {
         OrderStatus.PENDING -> 0
         OrderStatus.CONFIRMED -> 1
         OrderStatus.PROCESSING -> 2
-        OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> 3
-        OrderStatus.DELIVERED -> 4
+        OrderStatus.PACKED -> 3
+        OrderStatus.READY_FOR_PICKUP -> 4
+        OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> 5
+        OrderStatus.DELIVERED -> 6
+        OrderStatus.CANCELLED -> -1 // Special case handled by UI if needed
         else -> 0
     }
+
+    if (status == OrderStatus.CANCELLED || status == OrderStatus.RETURN_REJECTED) return
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -624,7 +631,7 @@ private fun OrderTrackingTimeline(status: OrderStatus) {
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             steps.forEachIndexed { index, (_, label) ->
-                val isDone = index <= currentIndex
+                val isDone = index <= currentIndex && currentIndex != -1
                 val isCurrent = index == currentIndex
                 Row(
                     verticalAlignment = Alignment.Top,
@@ -656,7 +663,7 @@ private fun OrderTrackingTimeline(status: OrderStatus) {
                                     .width(2.dp)
                                     .height(32.dp)
                                     .background(
-                                        if (index < currentIndex) MaterialTheme.colorScheme.primary
+                                        if (index < currentIndex && currentIndex != -1) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.outlineVariant
                                     )
                             )
@@ -790,6 +797,8 @@ private fun OrderStatusBadge(status: OrderStatus) {
     val (color, label) = when (status) {
         OrderStatus.PENDING, OrderStatus.CONFIRMED -> MaterialTheme.colorScheme.secondary to "Pending"
         OrderStatus.PROCESSING -> MaterialTheme.colorScheme.tertiary to "Processing"
+        OrderStatus.PACKED -> MaterialTheme.colorScheme.tertiary to "Packed"
+        OrderStatus.READY_FOR_PICKUP -> MaterialTheme.colorScheme.primary to "Ready for Pickup"
         OrderStatus.SHIPPED -> MaterialTheme.colorScheme.primary to "Shipped"
         OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary to "Out for Delivery"
         OrderStatus.DELIVERED -> Color(0xFF4CAF50) to "Delivered"

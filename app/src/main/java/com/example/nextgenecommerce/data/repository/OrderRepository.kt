@@ -40,102 +40,105 @@ class OrderRepository @Inject constructor(
             val totalSubtotal = request.items.sumOf { it.price * it.quantity }
             val totalShipping = if (totalSubtotal > 5000.0) 0.0 else 200.0
             val totalDiscount = request.discountAmount.coerceAtLeast(0.0)
-            
-            val orderInserts = mutableListOf<OrderInsert>()
-            val itemInserts = mutableListOf<OrderItemInsert>()
-            val txnInserts = mutableListOf<PaymentTransactionInsert>()
-            val roomOrders = mutableListOf<Order>()
-            
-            val now = System.currentTimeMillis()
 
-            request.items.forEachIndexed { index, item ->
-                val itemSubtotal = item.price * item.quantity
-                val itemTax = itemSubtotal * 0.08
-                
-                // Distribute shipping and discount proportionally based on item's share of total subtotal
-                val weight = if (totalSubtotal > 0) itemSubtotal / totalSubtotal else 1.0 / request.items.size
-                val itemShipping = totalShipping * weight
-                val itemDiscount = totalDiscount * weight
-                
-                val itemTotal = (itemSubtotal + itemTax + itemShipping - itemDiscount).coerceAtLeast(0.0)
-                
-                val orderId = UUID.randomUUID().toString()
-                // Append index to ensure unique order numbers even if processed within the same millisecond
-                val orderNumber = "ORD-$now-${index + 1}"
+            val orderInserts = mutableListOf<OrderInsert>()
+            val itemInserts  = mutableListOf<OrderItemInsert>()
+            val txnInserts   = mutableListOf<PaymentTransactionInsert>()
+            val roomOrders   = mutableListOf<Order>()
+
+            val now           = System.currentTimeMillis()
+            // One shared ID links all sub-orders from this checkout session
+            val parentOrderId = UUID.randomUUID().toString()
+
+            // Group items by retailer (empty retailerId = no specific store / admin product)
+            val groups = request.items.groupBy { it.retailerId.ifEmpty { "no_retailer" } }
+
+            groups.entries.forEachIndexed { groupIndex, (retailerKey, groupItems) ->
+                val groupSubtotal = groupItems.sumOf { it.price * it.quantity }
+                val groupTax      = groupSubtotal * 0.08
+
+                // Distribute shipping & discount proportionally across retailer groups
+                val weight      = if (totalSubtotal > 0) groupSubtotal / totalSubtotal else 1.0 / groups.size
+                val groupShip   = totalShipping * weight
+                val groupDisc   = totalDiscount * weight
+                val groupTotal  = (groupSubtotal + groupTax + groupShip - groupDisc).coerceAtLeast(0.0)
+
+                val orderId     = UUID.randomUUID().toString()
+                val orderNumber = "ORD-$now-${groupIndex + 1}"
+                val retailerId  = if (retailerKey == "no_retailer") null else retailerKey
 
                 orderInserts.add(OrderInsert(
-                    id = orderId,
-                    userId = userId,
-                    orderNumber = orderNumber,
-                    subtotal = itemSubtotal,
-                    tax = itemTax,
-                    shipping = itemShipping,
-                    total = itemTotal,
-                    currency = "PKR",
-                    status = "PENDING",
-                    paymentStatus = "PENDING",
-                    paymentMethod = request.paymentMethod,
-                    shippingAddressId = null
+                    id             = orderId,
+                    userId         = userId,
+                    orderNumber    = orderNumber,
+                    subtotal       = groupSubtotal,
+                    tax            = groupTax,
+                    shipping       = groupShip,
+                    total          = groupTotal,
+                    currency       = "PKR",
+                    status         = "PENDING",
+                    paymentStatus  = "PENDING",
+                    paymentMethod  = request.paymentMethod,
+                    shippingAddressId = null,
+                    retailerId     = retailerId,
+                    parentOrderId  = parentOrderId
                 ))
 
-                itemInserts.add(OrderItemInsert(
-                    orderId = orderId,
-                    productId = item.productId,
-                    productName = item.productName,
-                    productImage = item.productImage,
-                    price = item.price,
-                    quantity = item.quantity,
-                    selectedSize = item.selectedSize,
-                    selectedColor = item.selectedColor
-                ))
+                groupItems.forEach { item ->
+                    itemInserts.add(OrderItemInsert(
+                        orderId      = orderId,
+                        productId    = item.productId,
+                        productName  = item.productName,
+                        productImage = item.productImage,
+                        price        = item.price,
+                        quantity     = item.quantity,
+                        selectedSize  = item.selectedSize,
+                        selectedColor = item.selectedColor
+                    ))
+                }
 
                 txnInserts.add(PaymentTransactionInsert(
-                    orderId = orderId,
+                    orderId       = orderId,
                     paymentMethod = request.paymentMethod,
                     transactionId = "TXN-$orderId",
-                    status = "PENDING",
-                    amount = itemTotal,
-                    currency = "PKR",
-                    otpVerified = false
+                    status        = "PENDING",
+                    amount        = groupTotal,
+                    currency      = "PKR",
+                    otpVerified   = false
                 ))
 
                 roomOrders.add(Order(
-                    id = orderId,
-                    userId = userId,
-                    orderNumber = orderNumber,
-                    items = listOf(item),
-                    subtotal = itemSubtotal,
-                    tax = itemTax,
-                    shipping = itemShipping,
-                    total = itemTotal,
-                    currency = "PKR",
-                    status = OrderStatus.PENDING,
-                    paymentStatus = PaymentStatus.PENDING,
-                    paymentMethod = runCatching { PaymentMethod.valueOf(request.paymentMethod) }.getOrDefault(PaymentMethod.CASH_ON_DELIVERY),
+                    id              = orderId,
+                    userId          = userId,
+                    orderNumber     = orderNumber,
+                    items           = groupItems,
+                    subtotal        = groupSubtotal,
+                    tax             = groupTax,
+                    shipping        = groupShip,
+                    total           = groupTotal,
+                    currency        = "PKR",
+                    status          = OrderStatus.PENDING,
+                    paymentStatus   = PaymentStatus.PENDING,
+                    paymentMethod   = runCatching { PaymentMethod.valueOf(request.paymentMethod) }
+                                        .getOrDefault(PaymentMethod.CASH_ON_DELIVERY),
                     shippingAddress = request.shippingAddress,
-                    createdAt = now,
-                    updatedAt = now
+                    retailerId      = retailerId,
+                    parentOrderId   = parentOrderId,
+                    createdAt       = now,
+                    updatedAt       = now
                 ))
             }
 
             // 1. Batch insert into Supabase
             supabaseDb.from("orders").insert(orderInserts)
-            try {
-                supabaseDb.from("order_items").insert(itemInserts)
-            } catch (_: Exception) {}
-            try {
-                supabaseDb.from("payment_transactions").insert(txnInserts)
-            } catch (_: Exception) {}
+            try { supabaseDb.from("order_items").insert(itemInserts) } catch (_: Exception) {}
+            try { supabaseDb.from("payment_transactions").insert(txnInserts) } catch (_: Exception) {}
 
             // 2. Save all to Room
             roomOrders.forEach { orderDao.insertOrder(it) }
 
-            if (roomOrders.isNotEmpty()) {
-                // Return the first order to the UI for navigation and success display
-                emit(Resource.Success(roomOrders.first()))
-            } else {
-                emit(Resource.Error("No items in order"))
-            }
+            emit(if (roomOrders.isNotEmpty()) Resource.Success(roomOrders.first())
+                 else Resource.Error("No items in order"))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Failed to place order"))
         }
@@ -452,7 +455,9 @@ private data class OrderInsert(
     @SerialName("status") val status: String,
     @SerialName("payment_status") val paymentStatus: String,
     @SerialName("payment_method") val paymentMethod: String,
-    @SerialName("shipping_address_id") val shippingAddressId: String?
+    @SerialName("shipping_address_id") val shippingAddressId: String?,
+    @SerialName("retailer_id") val retailerId: String? = null,
+    @SerialName("parent_order_id") val parentOrderId: String? = null
 )
 
 @Serializable
@@ -493,6 +498,9 @@ private data class SupabaseOrderRow(
     @SerialName("status") val status: String = "PENDING",
     @SerialName("payment_status") val paymentStatus: String = "PENDING",
     @SerialName("payment_method") val paymentMethod: String = "SAFEPAY",
+    @SerialName("retailer_id") val retailerId: String? = null,
+    @SerialName("delivery_partner_id") val deliveryPartnerId: String? = null,
+    @SerialName("parent_order_id") val parentOrderId: String? = null,
     @SerialName("cancellation_reason") val cancellationReason: String? = null,
     @SerialName("return_reason") val returnReason: String? = null,
     @SerialName("return_images") val returnImages: List<String> = emptyList(),
@@ -514,6 +522,9 @@ private data class SupabaseOrderRow(
         status = runCatching { OrderStatus.valueOf(status) }.getOrDefault(OrderStatus.PENDING),
         paymentStatus = runCatching { PaymentStatus.valueOf(paymentStatus) }.getOrDefault(PaymentStatus.PENDING),
         paymentMethod = runCatching { PaymentMethod.valueOf(paymentMethod) }.getOrDefault(PaymentMethod.CASH_ON_DELIVERY),
+        retailerId = retailerId,
+        deliveryPartnerId = deliveryPartnerId,
+        parentOrderId = parentOrderId,
         cancellationReason = cancellationReason,
         returnReason = returnReason,
         returnImages = returnImages,

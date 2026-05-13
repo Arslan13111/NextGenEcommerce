@@ -39,10 +39,16 @@ import com.example.nextgenecommerce.presentation.screens.admin.AdminDashboardScr
 import com.example.nextgenecommerce.presentation.screens.admin.AddProductScreen
 import com.example.nextgenecommerce.presentation.screens.admin.RevenueDetailScreen
 import com.example.nextgenecommerce.presentation.screens.admin.SalesDetailScreen
+import com.example.nextgenecommerce.presentation.screens.retailer.RetailerDashboardScreen
+import com.example.nextgenecommerce.presentation.screens.retailer.RetailerAddProductScreen
+import com.example.nextgenecommerce.presentation.screens.delivery.DeliveryDashboardScreen
+import com.example.nextgenecommerce.presentation.screens.stores.StoresScreen
+import com.example.nextgenecommerce.presentation.screens.stores.StoreProductsScreen
 
 @Composable
 fun NavGraph(
     navController: NavHostController,
+    cartViewModel: CartViewModel,
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     startDestination: String = Screen.Home.route
 ) {
@@ -61,7 +67,7 @@ fun NavGraph(
         }
 
         composable(Screen.Login.route) {
-            LoginScreen(navController = navController)
+            LoginScreen(navController = navController, cartViewModel = cartViewModel)
         }
 
         composable(Screen.Register.route) {
@@ -99,25 +105,24 @@ fun NavGraph(
             val productId = backStackEntry.arguments?.getString("productId") ?: ""
             ProductDetailScreen(
                 navController = navController,
-                productId = productId
+                productId = productId,
+                cartViewModel = cartViewModel
             )
         }
 
         // Shopping Screens
         composable(Screen.Cart.route) {
-            CartScreen(navController = navController)
+            CartScreen(
+                navController = navController,
+                viewModel = cartViewModel
+            )
         }
 
         composable(Screen.Wishlist.route) {
             WishlistScreen(navController = navController)
         }
 
-        composable(Screen.Checkout.route) { entry ->
-            // Share CartViewModel with CartScreen so checkoutItems set there are visible here
-            val cartEntry = remember(entry) {
-                navController.getBackStackEntry(Screen.Cart.route)
-            }
-            val cartViewModel: CartViewModel = hiltViewModel(cartEntry)
+        composable(Screen.Checkout.route) {
             CheckoutScreen(
                 navController = navController,
                 cartViewModel = cartViewModel
@@ -269,6 +274,51 @@ fun NavGraph(
             AddProductScreen(
                 navController = navController,
                 productId = productId
+            )
+        }
+
+        // Retailer Screens
+        composable(Screen.RetailerDashboard.route) {
+            RetailerDashboardScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.RetailerAddProduct.route,
+            arguments = listOf(
+                navArgument("productId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val productId = backStackEntry.arguments?.getString("productId")
+            RetailerAddProductScreen(navController = navController, productId = productId)
+        }
+
+        // Delivery Screens
+        composable(Screen.DeliveryDashboard.route) {
+            DeliveryDashboardScreen(navController = navController)
+        }
+
+        // Stores (customer-facing)
+        composable(Screen.Stores.route) {
+            StoresScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.StoreProducts.route,
+            arguments = listOf(
+                navArgument("retailerId") { type = NavType.StringType },
+                navArgument("storeName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val retailerId = backStackEntry.arguments?.getString("retailerId") ?: ""
+            val storeName  = backStackEntry.arguments?.getString("storeName") ?: ""
+            StoreProductsScreen(
+                navController = navController,
+                retailerId    = retailerId,
+                storeName     = storeName
             )
         }
     }

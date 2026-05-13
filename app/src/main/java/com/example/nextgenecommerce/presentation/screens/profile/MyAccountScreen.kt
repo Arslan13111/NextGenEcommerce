@@ -282,9 +282,13 @@ fun MyAccountScreen(
                 )
 
                 // Member Since — exact registration date
-                currentUser?.createdAt?.let { ts ->
+                currentUser?.createdAt?.takeIf { it.isNotBlank() }?.let { ts ->
                     val formatted = remember(ts) {
-                        SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(ts))
+                        try {
+                            val parsed = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).parse(ts)
+                                ?: java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(ts)
+                            SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(parsed ?: Date())
+                        } catch (e: Exception) { ts }
                     }
                     AccountFieldReadOnly(
                         label = "Member Since",

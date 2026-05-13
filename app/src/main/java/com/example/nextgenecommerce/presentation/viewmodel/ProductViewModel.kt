@@ -114,6 +114,16 @@ class ProductViewModel @Inject constructor(
         }
     }
 
+    fun syncProductById(productId: String) {
+        viewModelScope.launch {
+            productRepository.fetchProductFromSupabase(productId).collect {
+                if (it is Resource.Success) {
+                    _selectedProduct.value = it.data
+                }
+            }
+        }
+    }
+
     fun syncProducts() {
         viewModelScope.launch {
             productRepository.syncProducts().collect {

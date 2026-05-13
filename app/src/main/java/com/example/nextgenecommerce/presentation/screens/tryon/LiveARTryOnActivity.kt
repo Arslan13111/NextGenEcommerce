@@ -36,21 +36,18 @@ class LiveARTryOnActivity : AppCompatActivity() {
     private var isFrontCamera = true
     private var lensFound = false
     private val handler = Handler(Looper.getMainLooper())
-    private var pendingLensId: String? = null
+    // Always keep the active lens ID so we can re-init Camera Kit after gallery
+    private var activeLensId: String? = null
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             Log.d(TAG, "Camera permission granted")
-            pendingLensId?.let { setupCameraKit(it) }
+            activeLensId?.let { setupCameraKit(it) }
         } else {
             Log.e(TAG, "Camera permission denied")
-            Toast.makeText(
-                this,
-                "Camera permission is required for AR Try-On",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Camera permission is required for AR Try-On", Toast.LENGTH_LONG).show()
             finish()
         }
     }
@@ -62,35 +59,24 @@ class LiveARTryOnActivity : AppCompatActivity() {
         val lensId = intent.getStringExtra(EXTRA_LENS_ID)
         val productName = intent.getStringExtra(EXTRA_PRODUCT_NAME) ?: "Live Try On"
 
-        Log.d(TAG, "Received lensId='$lensId', productName='$productName'")
-        Log.d(TAG, "Using LENS_GROUP_ID='$LENS_GROUP_ID'")
-
         if (lensId.isNullOrBlank()) {
             Toast.makeText(this, "No lens ID provided", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        // Set title
+        activeLensId = lensId
         findViewById<android.widget.TextView>(R.id.tv_title).text = productName
 
-        // Close button
-        findViewById<ImageButton>(R.id.btn_close).setOnClickListener {
-            finish()
-        }
+        findViewById<ImageButton>(R.id.btn_close).setOnClickListener { finish() }
 
-        // Flip camera button
-        findViewById<ImageButton>(R.id.btn_flip_camera).setOnClickListener {
-            flipCamera()
-        }
+        findViewById<ImageButton>(R.id.btn_flip_camera).setOnClickListener { flipCamera() }
 
-        // Check camera permission before initializing Camera Kit
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
         ) {
             setupCameraKit(lensId)
         } else {
-            pendingLensId = lensId
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
@@ -98,60 +84,38 @@ class LiveARTryOnActivity : AppCompatActivity() {
     private fun setupCameraKit(lensId: String) {
         val loadingIndicator = findViewById<ProgressBar>(R.id.loading_indicator)
         loadingIndicator.visibility = View.VISIBLE
+        lensFound = false
 
         try {
-            // Create CameraX source (front camera by default for try-on)
-            cameraXSource = CameraXImageProcessorSource(
-                context = this,
-                lifecycleOwner = this
-            )
-            cameraXSource?.startPreview(true) // true = front camera
+            cameraXSource = CameraXImageProcessorSource(context = this, lifecycleOwner = this)
+            cameraXSource?.startPreview(isFrontCamera)
 
-            // Create Camera Kit session
-            Log.d(TAG, "Creating Camera Kit session...")
             cameraKitSession = Session(context = this) {
                 imageProcessorSource(cameraXSource!!)
                 attachTo(findViewById(R.id.camera_kit_stub))
             }
-            Log.d(TAG, "Camera Kit session created successfully")
 
-            // Fetch and apply the specific lens
-            Log.d(TAG, "Querying lens: id='$lensId', groupId='$LENS_GROUP_ID'")
             lensObservation = cameraKitSession?.lenses?.repository?.observe(
                 LensesComponent.Repository.QueryCriteria.ById(lensId, LENS_GROUP_ID)
             ) { result ->
-                Log.d(TAG, "Lens repository callback received: $result")
                 result.whenHasFirst { lens ->
                     lensFound = true
-                    Log.d(TAG, "Lens found: ${lens.name} (id=${lens.id}), applying...")
                     cameraKitSession?.lenses?.processor?.apply(lens) { success ->
                         runOnUiThread {
                             loadingIndicator.visibility = View.GONE
-                            if (success) {
-                                Log.d(TAG, "Lens applied successfully")
-                            } else {
-                                Log.e(TAG, "Failed to apply lens")
-                                Toast.makeText(
-                                    this@LiveARTryOnActivity,
-                                    "Failed to apply AR lens",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                            if (!success) {
+                                Toast.makeText(this, "Failed to apply AR lens", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
                 }
             }
 
-            // Timeout fallback if lens is not found within 15 seconds
             handler.postDelayed({
                 if (!lensFound) {
                     loadingIndicator.visibility = View.GONE
-                    Log.e(TAG, "Lens not found after timeout: lensId='$lensId', groupId='$LENS_GROUP_ID'")
-                    Toast.makeText(
-                        this@LiveARTryOnActivity,
-                        "AR lens not found. Please check the lens ID and ensure it belongs to group: $LENS_GROUP_ID",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Log.e(TAG, "Lens not found after timeout")
+                    Toast.makeText(this, "AR lens not found", Toast.LENGTH_LONG).show()
                 }
             }, 15_000L)
         } catch (e: Exception) {
@@ -162,6 +126,20 @@ class LiveARTryOnActivity : AppCompatActivity() {
         }
     }
 
+    /** Release Camera Kit so hardware codec is free for video/image use. */
+    private fun releaseCameraKit() {
+        try {
+            handler.removeCallbacksAndMessages(null)
+            lensObservation?.close()
+            lensObservation = null
+            cameraKitSession?.close()
+            cameraKitSession = null
+            cameraXSource = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing Camera Kit", e)
+        }
+    }
+
     private fun flipCamera() {
         isFrontCamera = !isFrontCamera
         cameraXSource?.startPreview(isFrontCamera)
@@ -169,11 +147,6 @@ class LiveARTryOnActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacksAndMessages(null)
-        lensObservation?.close()
-        lensObservation = null
-        cameraKitSession?.close()
-        cameraKitSession = null
-        cameraXSource = null
+        releaseCameraKit()
     }
 }

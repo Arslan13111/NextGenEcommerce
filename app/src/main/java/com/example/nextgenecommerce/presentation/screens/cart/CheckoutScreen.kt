@@ -237,7 +237,8 @@ fun CheckoutScreen(
                                         price = it.price,
                                         quantity = it.quantity,
                                         selectedSize = it.selectedSize,
-                                        selectedColor = it.selectedColor
+                                        selectedColor = it.selectedColor,
+                                        retailerId = it.retailerId
                                     )
                                 },
                                 shippingAddress = address,

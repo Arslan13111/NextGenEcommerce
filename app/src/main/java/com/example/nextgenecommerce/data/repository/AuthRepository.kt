@@ -11,6 +11,7 @@ import io.github.jan.supabase.gotrue.providers.builtin.IDToken
 import io.github.jan.supabase.gotrue.user.UserInfo
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -141,52 +142,37 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    suspend fun register(email: String, password: String, name: String): Flow<Resource<User>> = flow {
+    suspend fun register(email: String, password: String, name: String, role: String = "customer"): Flow<Resource<User>> = flow {
         emit(Resource.Loading())
         try {
             // Register user with Supabase Auth first
             // This will fail if email already exists in auth.users
+            // Pass name and role in user metadata so the server-side trigger can read them.
+            // This is necessary because email confirmation means no active session exists
+            // after signUpWith — RLS blocks any direct DB write at this point.
             val result = try {
                 supabaseAuth.signUpWith(Email) {
                     this.email = email
                     this.password = password
+                    this.data = kotlinx.serialization.json.buildJsonObject {
+                        put("name", name)
+                        put("role", role)
+                    }
                 }
             } catch (authError: Exception) {
-                // Check if it's a "user already exists" error
                 when {
                     authError.message?.contains("already registered", ignoreCase = true) == true ||
                     authError.message?.contains("already exists", ignoreCase = true) == true ||
                     authError.message?.contains("duplicate", ignoreCase = true) == true ->
                         throw Exception("This email is already registered. Please login instead.")
-                    else ->
-                        throw authError
+                    else -> throw authError
                 }
             }
 
-            // Get user ID from the result (works even if email confirmation is required)
             val userId = result?.id ?: throw Exception("Failed to get user ID from registration")
 
-            // Create user profile in users table
-            val user = User(
-                id = userId,
-                email = email,
-                name = name
-            )
-
-            // Insert user into users table
-            try {
-                supabaseDb.from("users")
-                    .insert(user)
-            } catch (insertError: Exception) {
-                // If insert fails due to unique constraint, provide helpful error
-                if (insertError.message?.contains("duplicate", ignoreCase = true) == true ||
-                    insertError.message?.contains("unique", ignoreCase = true) == true) {
-                    throw Exception("This email is already in use. Please use a different email or login.")
-                }
-                // For other errors, just proceed (trigger might have created the user)
-            }
-
-            emit(Resource.Success(user))
+            // Return the user object — the trigger will have written the correct role to the DB
+            emit(Resource.Success(User(id = userId, email = email, name = name, role = role)))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Registration failed"))
         }
@@ -324,6 +310,39 @@ class AuthRepository @Inject constructor(
             emit(Resource.Success(true))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Failed to send reset email"))
+        }
+    }
+
+    /**
+     * Fetch a user's role by their email.
+     * Used for automatic role detection on the login screen.
+     */
+    suspend fun fetchUserRole(email: String): Flow<Resource<String>> = flow {
+        emit(Resource.Loading())
+        try {
+            // First check if email is in the hardcoded admin list
+            if (AdminConfig.ADMIN_EMAILS.any { it.equals(email, ignoreCase = true) }) {
+                emit(Resource.Success(AdminConfig.ADMIN_ROLE))
+                return@flow
+            }
+
+            // Otherwise, query the users table
+            val userData = supabaseDb.from("users")
+                .select(columns = Columns.list("role")) {
+                    filter {
+                        eq("email", email)
+                    }
+                }
+                .decodeSingleOrNull<User>()
+
+            if (userData != null) {
+                emit(Resource.Success(userData.role))
+            } else {
+                emit(Resource.Error("No account found with this email"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching user role for $email", e)
+            emit(Resource.Error(e.message ?: "Could not detect account type"))
         }
     }
 

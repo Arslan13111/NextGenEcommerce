@@ -117,7 +117,16 @@ fun SplashScreen(
         startAnimation = true
         delay(2800)
         if (viewModel.isUserLoggedIn()) {
-            navController.navigate(Screen.Home.route) {
+            // Give a moment for currentUser to load from Supabase if not ready yet
+            if (viewModel.currentUser.value == null) delay(600)
+            val user = viewModel.currentUser.value
+            val destination = when {
+                user?.isDeliveryPartner() == true -> Screen.DeliveryDashboard.route
+                user?.isRetailer() == true        -> Screen.RetailerDashboard.route
+                user?.isAdmin() == true           -> Screen.AdminDashboard.route
+                else                              -> Screen.Home.route
+            }
+            navController.navigate(destination) {
                 popUpTo(Screen.Splash.route) { inclusive = true }
             }
         } else {

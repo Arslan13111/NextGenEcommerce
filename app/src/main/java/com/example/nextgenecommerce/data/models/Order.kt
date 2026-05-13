@@ -28,6 +28,10 @@ data class Order(
     val returnReason: String? = null,
     val returnImages: List<String> = emptyList(),
     val adminReturnNote: String? = null,
+    // Marketplace fields
+    val retailerId: String? = null,
+    val deliveryPartnerId: String? = null,
+    val parentOrderId: String? = null,  // links split sub-orders from one checkout
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -39,13 +43,16 @@ data class OrderItem(
     val price: Double = 0.0,
     val quantity: Int = 1,
     val selectedSize: String = "",
-    val selectedColor: String = ""
+    val selectedColor: String = "",
+    val retailerId: String = ""
 )
 
 enum class OrderStatus {
     PENDING,
     CONFIRMED,
     PROCESSING,
+    PACKED,             // retailer packed the item
+    READY_FOR_PICKUP,   // waiting for delivery partner to accept
     SHIPPED,
     OUT_FOR_DELIVERY,
     DELIVERED,
