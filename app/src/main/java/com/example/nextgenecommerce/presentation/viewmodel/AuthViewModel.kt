@@ -71,9 +71,9 @@ class AuthViewModel @Inject constructor(
         _adminLoginState.value = null
     }
 
-    fun register(email: String, password: String, name: String) {
+    fun register(email: String, password: String, name: String, role: String = "customer") {
         viewModelScope.launch {
-            authRepository.register(email, password, name).collect {
+            authRepository.register(email, password, name, role).collect {
                 _authState.value = it
                 if (it is Resource.Success) authRepository.updateSharedUser(it.data)
             }
@@ -144,6 +144,25 @@ class AuthViewModel @Inject constructor(
 
     private val _changePasswordState = MutableStateFlow<Resource<Boolean>?>(null)
     val changePasswordState: StateFlow<Resource<Boolean>?> = _changePasswordState.asStateFlow()
+
+    private val _detectedRole = MutableStateFlow<Resource<String>?>(null)
+    val detectedRole: StateFlow<Resource<String>?> = _detectedRole.asStateFlow()
+
+    fun detectUserRole(email: String) {
+        if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            _detectedRole.value = null
+            return
+        }
+        viewModelScope.launch {
+            authRepository.fetchUserRole(email).collect {
+                _detectedRole.value = it
+            }
+        }
+    }
+
+    fun resetDetectedRole() {
+        _detectedRole.value = null
+    }
 
     fun changePassword(newPassword: String) {
         viewModelScope.launch {

@@ -1,13 +1,17 @@
 package com.example.nextgenecommerce.presentation.screens.tryon
 
 import android.Manifest
+import android.content.ContentValues
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -31,9 +36,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.nextgenecommerce.models.TryOnState
+import com.example.nextgenecommerce.presentation.components.IconTextButton
 import com.example.nextgenecommerce.presentation.components.PrimaryButton
 import com.example.nextgenecommerce.presentation.components.SecondaryButton
-import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.ProductViewModel
 import com.example.nextgenecommerce.viewmodel.TryOnViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -47,32 +52,25 @@ fun TryOnScreen(
     productId: String,
     imageIndex: Int = 0,
     productViewModel: ProductViewModel = hiltViewModel(),
-    authViewModel: AuthViewModel = hiltViewModel(),
     tryOnViewModel: TryOnViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val product by productViewModel.selectedProduct.collectAsState()
-    val currentUser by authViewModel.currentUser.collectAsState()
     val tryOnState by tryOnViewModel.tryOnState.collectAsState()
     val avatarBitmap by tryOnViewModel.avatarBitmap.collectAsState()
     val avatarSource by tryOnViewModel.avatarSource.collectAsState()
-    val resultBitmap by tryOnViewModel.resultBitmap.collectAsState()
 
     var showCameraView by remember { mutableStateOf(false) }
     var showAvatarSourceDialog by remember { mutableStateOf(false) }
-    var selectedAvatarSex by remember { mutableStateOf("female") }
 
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Load product and set the product image URL
     LaunchedEffect(productId) {
         productViewModel.getProductById(productId)
     }
 
-    // When product loads, set the product image URL in the try-on ViewModel
     LaunchedEffect(product) {
         product?.let { prod ->
-            // Use the image at the selected carousel index, falling back to first image
             val imageUrl = prod.images.getOrElse(imageIndex) { prod.images.firstOrNull() }
             if (!imageUrl.isNullOrEmpty()) {
                 tryOnViewModel.setProductImageUrl(imageUrl)
@@ -80,42 +78,18 @@ fun TryOnScreen(
         }
     }
 
-    // Image Picker Launcher (for avatar photo)
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            tryOnViewModel.setAvatarFromUri(context, it)
-        }
+        uri?.let { tryOnViewModel.setAvatarFromUri(context, it) }
     }
 
-    // Avatar source selection dialog
     if (showAvatarSourceDialog) {
         AlertDialog(
             onDismissRequest = { showAvatarSourceDialog = false },
             title = { Text("Choose Your Photo") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Option 1: Use Profile Photo (if available)
-                    if (!currentUser?.profileImageUrl.isNullOrEmpty()) {
-                        TextButton(
-                            onClick = {
-                                tryOnViewModel.setAvatarFromProfileUrl(currentUser!!.profileImageUrl!!)
-                                showAvatarSourceDialog = false
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Default.AccountCircle, contentDescription = null)
-                                Text("Use Profile Photo")
-                            }
-                        }
-                    }
-
-                    // Option 2: Upload from Gallery
                     TextButton(
                         onClick = {
                             imagePickerLauncher.launch("image/*")
@@ -132,7 +106,6 @@ fun TryOnScreen(
                         }
                     }
 
-                    // Option 3: Take Photo
                     TextButton(
                         onClick = {
                             showAvatarSourceDialog = false
@@ -185,6 +158,47 @@ fun TryOnScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        bottomBar = {
+            if (tryOnState is TryOnState.Success) {
+                val successState = tryOnState as TryOnState.Success
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 16.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        IconTextButton(
+                            text = "Try Again",
+                            icon = { Icon(Icons.Default.Refresh, null) },
+                            onClick = { tryOnViewModel.clearAvatar() },
+                            modifier = Modifier.weight(1f),
+                            isPrimary = false
+                        )
+                        IconTextButton(
+                            text = "Save",
+                            icon = { Icon(Icons.Default.SaveAlt, null) },
+                            onClick = {
+                                val saved = saveBitmapToGallery(context, successState.resultBitmap)
+                                Toast.makeText(
+                                    context,
+                                    if (saved) "Image saved to Gallery" else "Failed to save image",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                            isPrimary = true
+                        )
+                    }
+                }
+            }
         }
     ) { paddingValues ->
         if (showCameraView) {
@@ -200,7 +214,6 @@ fun TryOnScreen(
                     .verticalScroll(rememberScrollState())
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                // Product Info Card
                 product?.let { prod ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -252,27 +265,17 @@ fun TryOnScreen(
                     Divider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
 
-                // Main content based on state
                 when (val state = tryOnState) {
                     is TryOnState.Idle -> {
                         if (avatarBitmap != null) {
-                            // Avatar selected - show preview and try-on button
                             AvatarPreviewSection(
                                 avatarBitmap = avatarBitmap!!,
                                 avatarSource = avatarSource,
-                                selectedSex = selectedAvatarSex,
-                                onSexChanged = { selectedAvatarSex = it },
                                 onChangeAvatar = { showAvatarSourceDialog = true },
-                                onTryOn = {
-                                    tryOnViewModel.processTryOn(
-                                        context = context
-                                    )
-                                }
+                                onTryOn = { tryOnViewModel.processTryOn(context) }
                             )
                         } else {
-                            // No avatar - show selection screen
                             AvatarSelectionScreen(
-                                hasProfileImage = !currentUser?.profileImageUrl.isNullOrEmpty(),
                                 onSelectSource = { showAvatarSourceDialog = true }
                             )
                         }
@@ -285,11 +288,14 @@ fun TryOnScreen(
                     is TryOnState.Success -> {
                         ResultSection(
                             resultBitmap = state.resultBitmap,
-                            onTryAgain = {
-                                tryOnViewModel.clearAvatar()
-                            },
-                            onSaveShare = {
-                                // TODO: Implement save and share
+                            onTryAgain = { tryOnViewModel.clearAvatar() },
+                            onSaveToGallery = {
+                                val saved = saveBitmapToGallery(context, state.resultBitmap)
+                                Toast.makeText(
+                                    context,
+                                    if (saved) "Image saved to Gallery" else "Failed to save image",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         )
                     }
@@ -299,9 +305,7 @@ fun TryOnScreen(
                             message = state.message,
                             retryable = state.retryable,
                             onRetry = { tryOnViewModel.retry(context) },
-                            onChangePhoto = {
-                                tryOnViewModel.clearAvatar()
-                            }
+                            onChangePhoto = { tryOnViewModel.clearAvatar() }
                         )
                     }
                 }
@@ -310,9 +314,36 @@ fun TryOnScreen(
     }
 }
 
+private fun saveBitmapToGallery(context: android.content.Context, bitmap: Bitmap): Boolean {
+    return try {
+        val filename = "TryOn_${System.currentTimeMillis()}.jpg"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/NextGenEcommerce")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        uri?.let {
+            context.contentResolver.openOutputStream(it)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(it, contentValues, null, null)
+            }
+            true
+        } ?: false
+    } catch (e: Exception) {
+        false
+    }
+}
+
 @Composable
 private fun AvatarSelectionScreen(
-    hasProfileImage: Boolean,
     onSelectSource: () -> Unit
 ) {
     Column(
@@ -340,10 +371,7 @@ private fun AvatarSelectionScreen(
         )
 
         Text(
-            text = if (hasProfileImage)
-                "Use your profile photo or upload a new one to see how this product looks on you"
-            else
-                "Upload a photo or take one to see how this product looks on you",
+            text = "Upload a photo or take one to see how this product looks on you",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -357,7 +385,6 @@ private fun AvatarSelectionScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Info card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -392,8 +419,6 @@ private fun AvatarSelectionScreen(
 private fun AvatarPreviewSection(
     avatarBitmap: Bitmap,
     avatarSource: String?,
-    selectedSex: String,
-    onSexChanged: (String) -> Unit,
     onChangeAvatar: () -> Unit,
     onTryOn: () -> Unit
 ) {
@@ -403,7 +428,6 @@ private fun AvatarPreviewSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Avatar preview
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -426,7 +450,6 @@ private fun AvatarPreviewSection(
             }
         }
 
-        // Avatar source indicator
         if (avatarSource != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -435,7 +458,6 @@ private fun AvatarPreviewSection(
             ) {
                 Icon(
                     imageVector = when (avatarSource) {
-                        "Profile Photo" -> Icons.Default.AccountCircle
                         "Camera Capture" -> Icons.Default.CameraAlt
                         else -> Icons.Default.PhotoLibrary
                     },
@@ -452,41 +474,6 @@ private fun AvatarPreviewSection(
             }
         }
 
-        // Gender selection
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Select Gender",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedSex == "female",
-                        onClick = { onSexChanged("female") },
-                        label = { Text("Female") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterChip(
-                        selected = selectedSex == "male",
-                        onClick = { onSexChanged("male") },
-                        label = { Text("Male") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // Action buttons
         PrimaryButton(
             text = "Try On This Product",
             onClick = onTryOn,
@@ -537,7 +524,7 @@ private fun LoadingSection(message: String) {
 private fun ResultSection(
     resultBitmap: Bitmap,
     onTryAgain: () -> Unit,
-    onSaveShare: () -> Unit
+    onSaveToGallery: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -545,24 +532,46 @@ private fun ResultSection(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Result label
-        Text(
-            text = "Try-On Result",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground,
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                shape = CircleShape,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Try-On Result",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "AI has generated your virtual preview",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
-        // Result image
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 300.dp, max = 500.dp),
-            shape = MaterialTheme.shapes.large,
+                .heightIn(min = 400.dp, max = 600.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Image(
                 bitmap = resultBitmap.asImageBitmap(),
@@ -572,22 +581,7 @@ private fun ResultSection(
             )
         }
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SecondaryButton(
-                text = "Try Again",
-                onClick = onTryAgain,
-                modifier = Modifier.weight(1f)
-            )
-            PrimaryButton(
-                text = "Save & Share",
-                onClick = onSaveShare,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        Spacer(modifier = Modifier.height(80.dp)) // Padding for fixed bottom bar
     }
 }
 

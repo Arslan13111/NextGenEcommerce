@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,11 +53,11 @@ private fun Color.luminance() = 0.299f * red + 0.587f * green + 0.114f * blue
 fun ProductDetailScreen(
     navController: NavController,
     productId: String,
-    productViewModel: ProductViewModel = hiltViewModel(),
-    cartViewModel: CartViewModel = hiltViewModel(),
-    wishlistViewModel: WishlistViewModel = hiltViewModel(),
-    authViewModel: AuthViewModel = hiltViewModel(),
-    reviewViewModel: ReviewViewModel = hiltViewModel()
+    productViewModel: ProductViewModel = hiltViewModel<ProductViewModel>(),
+    cartViewModel: CartViewModel = hiltViewModel<CartViewModel>(),
+    wishlistViewModel: WishlistViewModel = hiltViewModel<WishlistViewModel>(),
+    authViewModel: AuthViewModel = hiltViewModel<AuthViewModel>(),
+    reviewViewModel: ReviewViewModel = hiltViewModel<ReviewViewModel>()
 ) {
     val product by productViewModel.selectedProduct.collectAsStateWithLifecycle()
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
@@ -92,6 +94,7 @@ fun ProductDetailScreen(
 
     LaunchedEffect(productId) {
         productViewModel.getProductById(productId)
+        productViewModel.syncProductById(productId)
         reviewViewModel.loadReviews(productId)
         reviewViewModel.checkHasReviewed(productId)
     }
@@ -164,7 +167,7 @@ fun ProductDetailScreen(
         derivedStateOf { wishlistItems.any { it.productId == prod.id } }
     }
 
-        fun addToCartAndValidate(onSuccess: () -> Unit) {
+        fun addToCartAndValidate(onSuccess: (CartItem) -> Unit) {
             if (selectedSize == null || selectedColor == null) {
                 scope.launch {
                     snackbarHostState.showSnackbar(
@@ -189,10 +192,11 @@ fun ProductDetailScreen(
                     quantity = quantity,
                     selectedSize = selectedSize!!,
                     selectedColor = selectedColor!!,
-                    storeName = prod.brand.ifEmpty { "Default Store" }
+                    storeName = prod.brand.ifEmpty { "Default Store" },
+                    retailerId = prod.retailerId ?: ""
                 )
                 cartViewModel.addToCart(cartItem)
-                onSuccess()
+                onSuccess(cartItem)
             }
         }
 
@@ -278,7 +282,7 @@ fun ProductDetailScreen(
                                     indication = null,
                                     interactionSource = remember { MutableInteractionSource() }
                                 ) {
-                                    addToCartAndValidate {
+                                    addToCartAndValidate { item ->
                                         scope.launch {
                                             val result = snackbarHostState.showSnackbar(
                                                 message = "${prod.name} added to cart",
@@ -304,7 +308,8 @@ fun ProductDetailScreen(
                         // "Buy now" white button
                         Button(
                             onClick = {
-                                addToCartAndValidate {
+                                addToCartAndValidate { item ->
+                                    cartViewModel.setCheckoutItems(listOf(item))
                                     navController.navigate("checkout")
                                 }
                             },
@@ -397,12 +402,21 @@ fun ProductDetailScreen(
                                 lineHeight = 26.sp
                             )
                             if (prod.brand.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = prod.brand,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = prod.brand.uppercase(),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                         // Prices (right)

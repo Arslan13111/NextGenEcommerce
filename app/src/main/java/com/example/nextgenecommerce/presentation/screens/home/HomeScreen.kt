@@ -337,6 +337,34 @@ fun HomeScreen(
                 }
             }
 
+            // ── Browse Stores ──────────────────────────────────────────
+            item {
+                SectionHeader(
+                    title     = "Browse Stores",
+                    onShowAll = { navController.navigate(Screen.Stores.route) { launchSingleTop = true } }
+                )
+                Card(
+                    modifier  = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { navController.navigate(Screen.Stores.route) { launchSingleTop = true } },
+                    shape     = RoundedCornerShape(16.dp),
+                    colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Row(
+                        modifier  = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.StoreMallDirectory, null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Discover Stores", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
+                            Text("Browse all retailers and their products", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
             // ── Brands ─────────────────────────────────────────────────
             item {
                 val brands = allProducts.mapNotNull { it.brand.ifBlank { null } }.distinct().take(6)

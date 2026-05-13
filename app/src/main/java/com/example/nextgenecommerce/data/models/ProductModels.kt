@@ -36,6 +36,7 @@ data class ProductEntity(
     val isNew: Boolean = false,
     val tags: List<String> = emptyList(),
     val brand: String = "",
+    val retailerId: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
@@ -64,6 +65,7 @@ data class ProductEntity(
             isNew = isNew,
             tags = tags,
             brand = brand,
+            retailerId = retailerId,
             createdAt = createdAt,
             updatedAt = System.currentTimeMillis()
         )
@@ -123,6 +125,7 @@ data class CartItem(
     val selectedSize: String = "M",
     val selectedColor: String = "Black",
     val storeName: String = "Default Store",
+    val retailerId: String = "",
     val addedAt: Long = System.currentTimeMillis()
 ) {
     fun toSupabaseCartItem(): SupabaseCartItem {
@@ -137,6 +140,7 @@ data class CartItem(
             selectedSize = selectedSize,
             selectedColor = selectedColor,
             storeName = storeName,
+            retailerId = retailerId,
             addedAt = addedAt
         )
     }
@@ -163,6 +167,8 @@ data class SupabaseCartItem(
     val selectedColor: String = "Black",
     @SerialName("store_name")
     val storeName: String = "Default Store",
+    @SerialName("retailer_id")
+    val retailerId: String? = null,
     @SerialName("added_at")
     val addedAt: Long = System.currentTimeMillis(),
     @SerialName("updated_at")
@@ -181,6 +187,7 @@ data class SupabaseCartItem(
             selectedSize = selectedSize,
             selectedColor = selectedColor,
             storeName = storeName,
+            retailerId = retailerId ?: "",
             addedAt = addedAt
         )
     }
@@ -260,6 +267,8 @@ data class SupabaseProduct(
     val isNew: Boolean = false,
     val tags: List<String> = emptyList(),
     val brand: String = "",
+    @SerialName("retailer_id")
+    val retailerId: String? = null,
     @SerialName("created_at")
     val createdAt: Long = System.currentTimeMillis(),
     @SerialName("updated_at")
@@ -301,6 +310,7 @@ data class SupabaseProduct(
             isNew = isNew,
             tags = tags,
             brand = brand,
+            retailerId = retailerId,
             createdAt = createdAt,
             updatedAt = updatedAt
         )

@@ -2,7 +2,11 @@ package com.example.nextgenecommerce.presentation.screens.tryon
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Log
+import android.widget.VideoView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -16,12 +20,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
@@ -37,6 +43,18 @@ fun LiveCameraTryOnView(
 
     var isCapturing by remember { mutableStateOf(false) }
     var isFrontCamera by remember { mutableStateOf(true) }
+    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedMediaIsVideo by remember { mutableStateOf(false) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val mimeType = context.contentResolver.getType(uri) ?: ""
+            selectedMediaIsVideo = mimeType.startsWith("video/")
+            selectedMediaUri = uri
+        }
+    }
 
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
 
@@ -102,11 +120,41 @@ fun LiveCameraTryOnView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Camera Preview
-        AndroidView(
-            factory = { previewView },
-            modifier = Modifier.fillMaxSize()
-        )
+        // Camera Preview (hidden when gallery media is selected)
+        if (selectedMediaUri == null) {
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Gallery media display
+        selectedMediaUri?.let { uri ->
+            if (selectedMediaIsVideo) {
+                AndroidView(
+                    factory = { ctx ->
+                        VideoView(ctx).apply {
+                            setVideoURI(uri)
+                            setOnPreparedListener { mp ->
+                                mp.isLooping = true
+                                start()
+                            }
+                        }
+                    },
+                    update = { videoView ->
+                        if (!videoView.isPlaying) videoView.start()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "Selected photo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
 
         // Overlay UI
         Column(
@@ -150,7 +198,24 @@ fun LiveCameraTryOnView(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
 
-                Spacer(modifier = Modifier.size(48.dp)) // Placeholder for symmetry
+                if (selectedMediaUri != null) {
+                    IconButton(
+                        onClick = { selectedMediaUri = null },
+                        modifier = Modifier
+                            .background(
+                                Color.Black.copy(alpha = 0.5f),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            Icons.Default.Videocam,
+                            contentDescription = "Back to Camera",
+                            tint = Color.White
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
+                }
             }
 
             // Bottom Bar with Controls
@@ -167,7 +232,12 @@ fun LiveCameraTryOnView(
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Text(
-                        text = "Position yourself in the frame to see the product on you",
+                        text = if (selectedMediaUri != null) {
+                            if (selectedMediaIsVideo) "Video loaded — tap camera icon to go back to live view"
+                            else "Photo loaded — tap camera icon to go back to live view"
+                        } else {
+                            "Position yourself in the frame or tap the gallery icon to load a photo/video"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White,
                         modifier = Modifier.padding(12.dp)
@@ -180,37 +250,66 @@ fun LiveCameraTryOnView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Flip Camera Button - Left aligned
-                    IconButton(
-                        onClick = { isFrontCamera = !isFrontCamera },
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(
-                                Color.White,
-                                CircleShape
-                            )
+                    // Left group: Flip Camera + Gallery
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.FlipCameraAndroid,
-                            contentDescription = "Flip Camera",
-                            tint = Color.Black,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        // Flip Camera Button (disabled in gallery mode)
+                        IconButton(
+                            onClick = { isFrontCamera = !isFrontCamera },
+                            enabled = selectedMediaUri == null,
+                            modifier = Modifier
+                                .size(52.dp)
+                                .background(
+                                    if (selectedMediaUri == null) Color.White
+                                    else Color.White.copy(alpha = 0.3f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.FlipCameraAndroid,
+                                contentDescription = "Flip Camera",
+                                tint = if (selectedMediaUri == null) Color.Black else Color.Gray,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        // Gallery Button
+                        IconButton(
+                            onClick = { galleryLauncher.launch("*/*") },
+                            modifier = Modifier
+                                .size(52.dp)
+                                .background(
+                                    Color.Black.copy(alpha = 0.5f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                Icons.Default.PhotoLibrary,
+                                contentDescription = "Open Gallery",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
 
-                    // Capture Button - Center
+                    // Capture Button - Center (disabled in gallery mode)
                     IconButton(
                         onClick = {
-                            isCapturing = true
-                            // TODO: Capture photo
+                            if (selectedMediaUri == null) {
+                                isCapturing = true
+                                // TODO: Capture photo
+                            }
                         },
                         modifier = Modifier
                             .size(72.dp)
                             .background(
-                                MaterialTheme.colorScheme.primary,
+                                if (selectedMediaUri == null) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
                                 CircleShape
                             ),
-                        enabled = !isCapturing
+                        enabled = !isCapturing && selectedMediaUri == null
                     ) {
                         if (isCapturing) {
                             CircularProgressIndicator(
@@ -228,22 +327,8 @@ fun LiveCameraTryOnView(
                         }
                     }
 
-                    // Settings Button - Right
-                    IconButton(
-                        onClick = { /* Open settings */ },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                Color.Black.copy(alpha = 0.5f),
-                                CircleShape
-                            )
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White
-                        )
-                    }
+                    // Right spacer to keep capture button visually centred
+                    Spacer(modifier = Modifier.size(114.dp))
                 }
             }
         }

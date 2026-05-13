@@ -20,7 +20,7 @@ data class User(
     @SerialName("profile_image_url")
     val profileImageUrl: String? = null,
     @SerialName("created_at")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: String? = null,
     @SerialName("role")
     val role: String = "customer",
     @SerialName("updated_at")
@@ -36,6 +36,14 @@ data class User(
         return role.equals("admin", ignoreCase = true) ||
                id == AdminConfig.ADMIN_USER_ID ||
                AdminConfig.ADMIN_EMAILS.any { it.equals(email, ignoreCase = true) }
+    }
+
+    fun isRetailer(): Boolean {
+        return role.equals("retailer", ignoreCase = true)
+    }
+
+    fun isDeliveryPartner(): Boolean {
+        return role.equals("delivery_partner", ignoreCase = true)
     }
 }
 
@@ -53,11 +61,15 @@ object AdminConfig {
 
     const val ADMIN_ROLE    = "admin"
     const val CUSTOMER_ROLE = "customer"
+    const val RETAILER_ROLE = "retailer"
+    const val DELIVERY_ROLE = "delivery_partner"
 }
 
 enum class UserRole {
     CUSTOMER,
-    ADMIN
+    ADMIN,
+    RETAILER,
+    DELIVERY_PARTNER
 }
 
 data class Address(

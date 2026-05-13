@@ -1795,6 +1795,8 @@ fun orderStatusColor(status: OrderStatus): Color = when (status) {
     OrderStatus.PENDING -> Color(0xFFF57C00)
     OrderStatus.CONFIRMED -> Color(0xFF0288D1)
     OrderStatus.PROCESSING -> Color(0xFF7B1FA2)
+    OrderStatus.PACKED -> Color(0xFF00897B)
+    OrderStatus.READY_FOR_PICKUP -> Color(0xFF43A047)
     OrderStatus.SHIPPED -> Color(0xFF00838F)
     OrderStatus.OUT_FOR_DELIVERY -> Color(0xFF558B2F)
     OrderStatus.DELIVERED -> Color(0xFF388E3C)
@@ -1808,6 +1810,8 @@ fun orderStatusIcon(status: OrderStatus): ImageVector = when (status) {
     OrderStatus.PENDING -> Icons.Default.Schedule
     OrderStatus.CONFIRMED -> Icons.Default.CheckCircleOutline
     OrderStatus.PROCESSING -> Icons.Default.Refresh
+    OrderStatus.PACKED -> Icons.Default.Inventory
+    OrderStatus.READY_FOR_PICKUP -> Icons.Default.Store
     OrderStatus.SHIPPED -> Icons.Default.LocalShipping
     OrderStatus.OUT_FOR_DELIVERY -> Icons.Default.LocalShipping
     OrderStatus.DELIVERED -> Icons.Default.CheckCircle

@@ -9,6 +9,8 @@ import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +20,8 @@ class CartRepository @Inject constructor(
     private val supabaseAuth: Auth,
     private val supabaseDb: Postgrest
 ) {
+
+    private val cartMutex = Mutex()
 
     companion object {
         private const val TAG = "CartRepository"
@@ -46,10 +50,14 @@ class CartRepository @Inject constructor(
 
     // --- Write operations ---
 
-    suspend fun addToCart(item: CartItem) {
+    suspend fun addToCart(item: CartItem) = cartMutex.withLock {
         val userId = getCurrentUserId()
         val itemWithUser = item.copy(userId = userId)
 
+        // 1. Update local Room database immediately for optimistic UI
+        addToLocalCart(itemWithUser)
+
+        // 2. Sync with Supabase if logged in
         if (isUserLoggedIn()) {
             try {
                 val existingItems = supabaseDb.from(CART_TABLE)
@@ -76,14 +84,10 @@ class CartRepository @Inject constructor(
                     supabaseDb.from(CART_TABLE)
                         .insert(itemWithUser.toSupabaseCartItem())
                 }
-
-                refreshLocalCache(userId)
             } catch (e: Exception) {
-                Log.e(TAG, "Error adding to Supabase cart, falling back to local", e)
-                addToLocalCart(itemWithUser)
+                Log.e(TAG, "Error adding to Supabase cart", e)
+                // We already updated local Room, so we don't need to do anything else
             }
-        } else {
-            addToLocalCart(itemWithUser)
         }
     }
 
@@ -98,15 +102,18 @@ class CartRepository @Inject constructor(
         }
     }
 
-    suspend fun updateQuantity(itemId: Int, quantity: Int) {
+    suspend fun updateQuantity(itemId: Int, quantity: Int) = cartMutex.withLock {
         if (quantity <= 0) {
-            cartDao.getCartItemById(itemId)?.let { removeFromCart(it) }
-            return
+            cartDao.getCartItemById(itemId)?.let { removeFromCartInternal(it) }
+            return@withLock
         }
+
+        // Optimistic local update
+        cartDao.updateQuantity(itemId, quantity)
 
         if (isUserLoggedIn()) {
             try {
-                val localItem = cartDao.getCartItemById(itemId) ?: return
+                val localItem = cartDao.getCartItemById(itemId) ?: return@withLock
                 val userId = getCurrentUserId()
 
                 val remoteItems = supabaseDb.from(CART_TABLE)
@@ -128,18 +135,17 @@ class CartRepository @Inject constructor(
                             filter { eq("id", remoteItems.first().id) }
                         }
                 }
-
-                cartDao.updateQuantity(itemId, quantity)
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating quantity on Supabase", e)
-                cartDao.updateQuantity(itemId, quantity)
             }
-        } else {
-            cartDao.updateQuantity(itemId, quantity)
         }
     }
 
-    suspend fun removeFromCart(item: CartItem) {
+    suspend fun removeFromCart(item: CartItem) = cartMutex.withLock {
+        removeFromCartInternal(item)
+    }
+
+    private suspend fun removeFromCartInternal(item: CartItem) {
         if (isUserLoggedIn()) {
             try {
                 supabaseDb.from(CART_TABLE)
@@ -158,7 +164,7 @@ class CartRepository @Inject constructor(
         cartDao.deleteCartItem(item)
     }
 
-    suspend fun clearCart() {
+    suspend fun clearCart() = cartMutex.withLock {
         val userId = getCurrentUserId()
 
         if (isUserLoggedIn()) {
@@ -185,18 +191,21 @@ class CartRepository @Inject constructor(
                 return@flow
             }
 
-            val remoteItems = supabaseDb.from(CART_TABLE)
-                .select {
-                    filter { eq("user_id", userId) }
-                }
-                .decodeList<SupabaseCartItem>()
+            val remoteItems = cartMutex.withLock {
+                val items = supabaseDb.from(CART_TABLE)
+                    .select {
+                        filter { eq("user_id", userId) }
+                    }
+                    .decodeList<SupabaseCartItem>()
 
-            Log.d(TAG, "Fetched ${remoteItems.size} cart items from Supabase")
+                Log.d(TAG, "Fetched ${items.size} cart items from Supabase")
 
-            val localItems = remoteItems.map { it.toEntity() }
-            cartDao.replaceCartItems(userId, localItems)
+                val localItems = items.map { it.toEntity() }
+                cartDao.replaceCartItems(userId, localItems)
+                localItems
+            }
 
-            emit(Resource.Success(localItems))
+            emit(Resource.Success(remoteItems))
         } catch (e: Exception) {
             Log.e(TAG, "Error syncing cart from Supabase", e)
             emit(Resource.Error(e.message ?: "Failed to sync cart"))
@@ -212,55 +221,57 @@ class CartRepository @Inject constructor(
                 return@flow
             }
 
-            val guestItems = cartDao.getGuestCartItems()
-            if (guestItems.isEmpty()) {
-                emit(Resource.Success(true))
-                return@flow
-            }
-
-            Log.d(TAG, "Merging ${guestItems.size} guest cart items to user $userId")
-
-            for (guestItem in guestItems) {
-                val existingRemote = supabaseDb.from(CART_TABLE)
-                    .select {
-                        filter {
-                            eq("user_id", userId)
-                            eq("product_id", guestItem.productId)
-                            eq("selected_size", guestItem.selectedSize)
-                            eq("selected_color", guestItem.selectedColor)
-                        }
-                    }
-                    .decodeList<SupabaseCartItem>()
-
-                if (existingRemote.isNotEmpty()) {
-                    val existing = existingRemote.first()
-                    val newQuantity = existing.quantity + guestItem.quantity
-                    supabaseDb.from(CART_TABLE)
-                        .update({
-                            set("quantity", newQuantity)
-                        }) {
-                            filter { eq("id", existing.id) }
-                        }
-                } else {
-                    val supabaseItem = guestItem.copy(userId = userId).toSupabaseCartItem()
-                    supabaseDb.from(CART_TABLE)
-                        .insert(supabaseItem)
+            cartMutex.withLock {
+                val guestItems = cartDao.getGuestCartItems()
+                if (guestItems.isEmpty()) {
+                    emit(Resource.Success(true))
+                    return@withLock
                 }
-            }
 
-            cartDao.clearCartByUser(GUEST_USER_ID)
-            emit(Resource.Success(true))
+                Log.d(TAG, "Merging ${guestItems.size} guest cart items to user $userId")
+
+                for (guestItem in guestItems) {
+                    val existingRemote = supabaseDb.from(CART_TABLE)
+                        .select {
+                            filter {
+                                eq("user_id", userId)
+                                eq("product_id", guestItem.productId)
+                                eq("selected_size", guestItem.selectedSize)
+                                eq("selected_color", guestItem.selectedColor)
+                            }
+                        }
+                        .decodeList<SupabaseCartItem>()
+
+                    if (existingRemote.isNotEmpty()) {
+                        val existing = existingRemote.first()
+                        val newQuantity = existing.quantity + guestItem.quantity
+                        supabaseDb.from(CART_TABLE)
+                            .update({
+                                set("quantity", newQuantity)
+                            }) {
+                                filter { eq("id", existing.id) }
+                            }
+                    } else {
+                        val supabaseItem = guestItem.copy(userId = userId).toSupabaseCartItem()
+                        supabaseDb.from(CART_TABLE)
+                            .insert(supabaseItem)
+                    }
+                }
+
+                cartDao.clearCartByUser(GUEST_USER_ID)
+                emit(Resource.Success(true))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error merging guest cart", e)
             emit(Resource.Error(e.message ?: "Failed to merge guest cart"))
         }
     }
 
-    suspend fun clearLocalUserCart(userId: String) {
+    suspend fun clearLocalUserCart(userId: String) = cartMutex.withLock {
         cartDao.clearCartByUser(userId)
     }
 
-    private suspend fun refreshLocalCache(userId: String) {
+    private suspend fun refreshLocalCache(userId: String) = cartMutex.withLock {
         try {
             val remoteItems = supabaseDb.from(CART_TABLE)
                 .select {

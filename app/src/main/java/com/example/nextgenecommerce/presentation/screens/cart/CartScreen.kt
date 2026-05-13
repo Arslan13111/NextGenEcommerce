@@ -176,6 +176,9 @@ fun CartScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    .padding(padding)
+                    .navigationBarsPadding()
+                    .padding(bottom = 80.dp)
             ) {
                 // Animated select-all pill
                 val pillBg by animateColorAsState(
@@ -191,7 +194,6 @@ fun CartScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(padding)
                         .padding(horizontal = 16.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically

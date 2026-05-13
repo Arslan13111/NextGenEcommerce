@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,7 +38,12 @@ import com.example.nextgenecommerce.presentation.navigation.NavGraph
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.theme.NextGenEcommerceTheme
 import com.example.nextgenecommerce.presentation.viewmodel.ThemeViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import dagger.hilt.android.AndroidEntryPoint
+
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 
 @AndroidEntryPoint
 class MainComposeActivity : ComponentActivity() {
@@ -43,6 +51,11 @@ class MainComposeActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Enable edge-to-edge to ensure WindowInsets (like IME) are correctly dispatched
+        enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             val darkModePref by themeViewModel.darkMode.collectAsStateWithLifecycle()
             val useSystemTheme by themeViewModel.useSystemTheme.collectAsStateWithLifecycle()
@@ -60,8 +73,12 @@ class MainComposeActivity : ComponentActivity() {
 @Composable
 fun MainApp() {
     val navController = rememberNavController()
+    val cartViewModel = hiltViewModel<CartViewModel>()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Keyboard visibility detection
+    val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     val bottomNavItems = remember {
         listOf(
@@ -73,9 +90,9 @@ fun MainApp() {
         )
     }
 
-    val showBottomBar by remember(currentRoute) {
+    val showBottomBar by remember(currentRoute, isKeyboardVisible) {
         derivedStateOf {
-            currentRoute in bottomNavItems.map { it.route }
+            currentRoute in bottomNavItems.map { it.route } && !isKeyboardVisible
         }
     }
 
@@ -92,6 +109,7 @@ fun MainApp() {
             // Use top padding from Scaffold, but keep bottom stable
             NavGraph(
                 navController = navController,
+                cartViewModel = cartViewModel,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),

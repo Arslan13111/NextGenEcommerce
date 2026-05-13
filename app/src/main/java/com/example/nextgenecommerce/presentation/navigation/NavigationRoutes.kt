@@ -89,6 +89,28 @@ sealed class Screen(val route: String) {
             "add_product"
         }
     }
+
+    // Retailer
+    object RetailerDashboard : Screen("retailer_dashboard")
+    object RetailerOrders : Screen("retailer_orders")
+    object RetailerInventory : Screen("retailer_inventory")
+    object StoreSettings : Screen("store_settings")
+    object RetailerAddProduct : Screen("retailer_add_product?productId={productId}") {
+        fun createRoute(productId: String? = null) =
+            if (productId != null) "retailer_add_product?productId=$productId"
+            else "retailer_add_product"
+    }
+
+    // Delivery
+    object DeliveryDashboard : Screen("delivery_dashboard")
+    object DeliveryOrders : Screen("delivery_orders")
+
+    // Stores (customer-facing)
+    object Stores : Screen("stores")
+    object StoreProducts : Screen("store_products/{retailerId}/{storeName}") {
+        fun createRoute(retailerId: String, storeName: String) =
+            "store_products/$retailerId/${storeName.replace("/", "_")}"
+    }
 }
 
 sealed class BottomNavItem(

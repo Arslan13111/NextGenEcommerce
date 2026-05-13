@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -193,13 +192,26 @@ object ImageUtils {
     }
 
     /**
-     * Load bitmap from Uri with proper orientation correction
+     * Load bitmap from Uri with proper orientation correction.
+     * Uses ContentResolver.openInputStream instead of the deprecated
+     * MediaStore.Images.Media.getBitmap which crashes on Android 10+ with
+     * scoped storage / modern photo picker URIs.
      */
     fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
         return try {
-            var bitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+            // First pass: read dimensions only to calculate inSampleSize
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 
-            // Try to correct orientation if possible
+            options.inSampleSize = calculateInSampleSize(options, MAX_DIMENSION, MAX_DIMENSION)
+            options.inJustDecodeBounds = false
+
+            // Second pass: decode with downsampling
+            var bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream, null, options)
+            } ?: return null
+
+            // Third pass: correct EXIF orientation
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 try {
                     val exif = ExifInterface(inputStream)
@@ -207,22 +219,17 @@ object ImageUtils {
                         ExifInterface.TAG_ORIENTATION,
                         ExifInterface.ORIENTATION_NORMAL
                     )
-
                     val matrix = Matrix()
                     when (orientation) {
                         ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
                         ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
                         ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
                     }
-
                     if (!matrix.isIdentity) {
-                        val correctedBitmap = Bitmap.createBitmap(
-                            bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
-                        )
+                        val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
                         bitmap.recycle()
-                        bitmap = correctedBitmap
-                    }
-                    Unit // Explicitly return Unit from try block
+                        bitmap = rotated
+                    } else Unit
                 } catch (e: Exception) {
                     android.util.Log.w(TAG, "Could not read EXIF data from URI", e)
                 }
@@ -233,6 +240,19 @@ object ImageUtils {
             android.util.Log.e(TAG, "Error loading bitmap from URI: ${e.message}", e)
             null
         }
+    }
+
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height, width) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 
     /**
