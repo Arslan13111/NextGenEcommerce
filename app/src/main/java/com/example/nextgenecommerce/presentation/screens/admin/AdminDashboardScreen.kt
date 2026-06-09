@@ -29,17 +29,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.example.nextgenecommerce.data.models.DeliveryPartner
 import com.example.nextgenecommerce.data.models.Order
 import com.example.nextgenecommerce.data.models.OrderStatus
 import com.example.nextgenecommerce.data.models.PaymentStatus
 import com.example.nextgenecommerce.data.models.ProductEntity
+import com.example.nextgenecommerce.data.models.Retailer
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
-import com.example.nextgenecommerce.presentation.viewmodel.OrderViewModel
-import com.example.nextgenecommerce.presentation.viewmodel.ProductViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.DeliveryViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.RetailerViewModel
 import com.example.nextgenecommerce.util.ColorUtils
 import com.example.nextgenecommerce.util.Resource
 import java.text.NumberFormat
@@ -51,36 +55,21 @@ import java.util.*
 fun AdminDashboardScreen(
     navController: NavController,
     authViewModel: AuthViewModel = hiltViewModel(),
-    productViewModel: ProductViewModel = hiltViewModel(),
-    orderViewModel: OrderViewModel = hiltViewModel()
+    retailerViewModel: RetailerViewModel = hiltViewModel(),
+    deliveryViewModel: DeliveryViewModel = hiltViewModel(),
+    adminVaultViewModel: com.example.nextgenecommerce.presentation.viewmodel.AdminVaultViewModel = hiltViewModel()
 ) {
-    val products by productViewModel.allProducts.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
     val isAdmin by authViewModel.isAdmin.collectAsState()
-    val allOrders by orderViewModel.allAdminOrders.collectAsState()
-    val productOperationState by productViewModel.productOperationState.collectAsState()
-    val updateOrderStatusState by orderViewModel.updateOrderStatusState.collectAsState()
-    val returnRefundState by orderViewModel.returnRefundState.collectAsState()
+    val vaultSummary by adminVaultViewModel.vaultSummary.collectAsState()
+    val allRetailers by retailerViewModel.allRetailers.collectAsState()
+    val retailerApprovalState by retailerViewModel.retailerApprovalState.collectAsState()
+    val allDeliveryPartners by deliveryViewModel.allDeliveryPartners.collectAsState()
+    val deliveryPartnerApprovalState by deliveryViewModel.deliveryPartnerApprovalState.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Overview", "Products", "Orders", "Returns")
+    val tabs = listOf("Overview", "Retailers", "Delivery")
 
-    // Products tab state
-    var productSearch by remember { mutableStateOf("") }
-    var productFilter by remember { mutableStateOf("All") }
-
-    // Orders tab state
-    var orderStatusFilter by remember { mutableStateOf<OrderStatus?>(null) }
-    var showStatusDialog by remember { mutableStateOf(false) }
-    var orderToUpdate by remember { mutableStateOf<Order?>(null) }
-    var expandedOrderId by remember { mutableStateOf<String?>(null) }
-
-    // Delete product state
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var productToDelete by remember { mutableStateOf<String?>(null) }
-    var lastProductOperation by remember { mutableStateOf("") } // "delete" | "color" | "update"
-
-    // Access denied
     var showAccessDeniedDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -89,66 +78,47 @@ fun AdminDashboardScreen(
         if (currentUser != null && !isAdmin) showAccessDeniedDialog = true
     }
 
-    LaunchedEffect(Unit) {
-        orderViewModel.loadAllOrdersForAdmin()
-    }
-
     LaunchedEffect(selectedTab) {
-        if (selectedTab == 2 || selectedTab == 3) {
-            orderViewModel.loadAllOrdersForAdmin()
+        when (selectedTab) {
+            0    -> adminVaultViewModel.loadVaultSummary()
+            1    -> retailerViewModel.loadAllRetailersForAdmin()
+            2    -> deliveryViewModel.loadAllDeliveryPartnersForAdmin()
         }
     }
 
-    LaunchedEffect(productOperationState) {
-        when (productOperationState) {
+    LaunchedEffect(retailerApprovalState) {
+        when (val s = retailerApprovalState) {
             is Resource.Success -> {
-                val msg = when (lastProductOperation) {
-                    "delete" -> "Product deleted successfully"
-                    "color"  -> "Color updated successfully"
-                    else     -> "Product updated successfully"
-                }
-                snackbarHostState.showSnackbar(msg)
-                productViewModel.resetProductOperationState()
+                snackbarHostState.showSnackbar("Retailer approval updated")
+                retailerViewModel.resetRetailerApprovalState()
             }
             is Resource.Error -> {
-                snackbarHostState.showSnackbar(
-                    (productOperationState as Resource.Error).message ?: "Operation failed"
-                )
-                productViewModel.resetProductOperationState()
+                snackbarHostState.showSnackbar(s.message ?: "Failed to update retailer")
+                retailerViewModel.resetRetailerApprovalState()
             }
             else -> {}
         }
     }
 
-    LaunchedEffect(updateOrderStatusState) {
-        when (updateOrderStatusState) {
+    LaunchedEffect(deliveryPartnerApprovalState) {
+        when (val s = deliveryPartnerApprovalState) {
             is Resource.Success -> {
-                snackbarHostState.showSnackbar("Order status updated")
-                orderViewModel.resetUpdateOrderStatusState()
+                snackbarHostState.showSnackbar("Delivery partner approval updated")
+                deliveryViewModel.resetDeliveryPartnerApprovalState()
             }
             is Resource.Error -> {
-                snackbarHostState.showSnackbar(
-                    (updateOrderStatusState as Resource.Error).message ?: "Failed to update status"
-                )
-                orderViewModel.resetUpdateOrderStatusState()
+                snackbarHostState.showSnackbar(s.message ?: "Failed to update delivery partner")
+                deliveryViewModel.resetDeliveryPartnerApprovalState()
             }
             else -> {}
         }
     }
 
-    LaunchedEffect(returnRefundState) {
-        when (returnRefundState) {
-            is Resource.Success -> {
-                snackbarHostState.showSnackbar("Refund processed — customer notified")
-                orderViewModel.resetReturnRefundState()
-            }
-            is Resource.Error -> {
-                snackbarHostState.showSnackbar(
-                    (returnRefundState as Resource.Error).message ?: "Failed to process refund"
-                )
-                orderViewModel.resetReturnRefundState()
-            }
-            else -> {}
+    LaunchedEffect(vaultSummary) {
+        if (vaultSummary is Resource.Error) {
+            snackbarHostState.showSnackbar(
+                "Commission fetch failed: ${(vaultSummary as Resource.Error).message}"
+            )
         }
     }
 
@@ -168,54 +138,6 @@ fun AdminDashboardScreen(
         )
     }
 
-    if (showStatusDialog && orderToUpdate != null) {
-        OrderStatusDialog(
-            order = orderToUpdate!!,
-            onDismiss = { showStatusDialog = false; orderToUpdate = null },
-            onConfirm = { newStatus ->
-                orderViewModel.updateOrderStatus(orderToUpdate!!.id, newStatus)
-                showStatusDialog = false
-                orderToUpdate = null
-            },
-            onAcceptReturn = { adminNote ->
-                orderViewModel.acceptReturn(orderToUpdate!!.id, adminNote)
-                showStatusDialog = false
-                orderToUpdate = null
-            },
-            onProcessRefund = {
-                orderViewModel.processReturnRefund(orderToUpdate!!.id)
-                showStatusDialog = false
-                orderToUpdate = null
-            }
-        )
-    }
-
-    if (showDeleteDialog && productToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            icon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("Delete Product") },
-            text = { Text("Are you sure you want to delete this product? This action cannot be undone.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        productToDelete?.let {
-                            lastProductOperation = "delete"
-                            productViewModel.deleteProductFromSupabase(it)
-                        }
-                        showDeleteDialog = false
-                        productToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showDeleteDialog = false; productToDelete = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -235,13 +157,9 @@ fun AdminDashboardScreen(
                     },
                     actions = {
                         IconButton(onClick = {
-                            productViewModel.syncProductsFromSupabase()
-                            orderViewModel.loadAllOrdersForAdmin()
+                            adminVaultViewModel.loadVaultSummary()
                         }) {
                             Icon(Icons.Default.Refresh, "Refresh")
-                        }
-                        IconButton(onClick = { navController.navigate(Screen.AddProduct.createRoute()) }) {
-                            Icon(Icons.Default.Add, "Add Product")
                         }
                         IconButton(onClick = {
                             authViewModel.logout()
@@ -265,7 +183,16 @@ fun AdminDashboardScreen(
                     },
                     divider = {}
                 ) {
-                    val tabIcons = listOf(Icons.Default.Dashboard, Icons.Default.Inventory, Icons.Default.ShoppingCart, Icons.Default.Undo)
+                    val tabIcons = listOf(
+                        Icons.Default.Dashboard,
+                        Icons.Default.Store,
+                        Icons.Default.LocalShipping
+                    )
+                    val unverifiedCount = (allRetailers as? Resource.Success)?.data
+                        ?.count { !it.isVerified } ?: 0
+                    val pendingDeliveryCount = (allDeliveryPartners as? Resource.Success)?.data
+                        ?.count { !it.isVerified } ?: 0
+
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
@@ -289,33 +216,17 @@ fun AdminDashboardScreen(
                                         maxLines = 1,
                                         softWrap = false
                                     )
-                                    
-                                    // Badges for Orders and Returns
-                                    if (index == 2 && allOrders.isNotEmpty()) {
-                                        val pending = allOrders.count { it.status == OrderStatus.PENDING }
-                                        if (pending > 0) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(16.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                                    Text("$pending", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 8.sp)
-                                                }
+                                    if (index == 1 && unverifiedCount > 0) {
+                                        Surface(shape = CircleShape, color = Color(0xFFE65100), modifier = Modifier.size(16.dp)) {
+                                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                Text("$unverifiedCount", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 8.sp)
                                             }
                                         }
                                     }
-                                    if (index == 3 && allOrders.isNotEmpty()) {
-                                        val returns = allOrders.count { it.status == OrderStatus.RETURN_REQUESTED }
-                                        if (returns > 0) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = Color(0xFF6A1B9A),
-                                                modifier = Modifier.size(16.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                                    Text("$returns", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 8.sp)
-                                                }
+                                    if (index == 2 && pendingDeliveryCount > 0) {
+                                        Surface(shape = CircleShape, color = Color(0xFF1565C0), modifier = Modifier.size(16.dp)) {
+                                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                                Text("$pendingDeliveryCount", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 8.sp)
                                             }
                                         }
                                     }
@@ -326,79 +237,33 @@ fun AdminDashboardScreen(
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (selectedTab == 1) {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Screen.AddProduct.createRoute()) },
-                    icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("Add Product") }
-                )
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         when (selectedTab) {
             0 -> OverviewTab(
                 modifier = Modifier.padding(padding),
-                products = products,
-                orders = allOrders,
-                onNavigateToProducts = { selectedTab = 1 },
-                onNavigateToOrders = { selectedTab = 2 },
-                onAddProduct = { navController.navigate(Screen.AddProduct.createRoute()) },
+                vaultSummary = vaultSummary,
                 onNavigateToRevenue = { navController.navigate(Screen.RevenueDetail.route) },
-                onNavigateToSales = { navController.navigate(Screen.SalesDetail.route) }
+                onRefreshVault = { adminVaultViewModel.loadVaultSummary() }
             )
-            1 -> ProductsTab(
+            1 -> RetailersTab(
                 modifier = Modifier.padding(padding),
-                products = products,
-                searchQuery = productSearch,
-                onSearchChange = { productSearch = it },
-                filter = productFilter,
-                onFilterChange = { productFilter = it },
-                onEdit = { navController.navigate(Screen.AddProduct.createRoute(it)) },
-                onDelete = { productToDelete = it; showDeleteDialog = true },
-                onColorChange = { productId, colorIndex, newColorName ->
-                    products.find { it.id == productId }?.let { product ->
-                        val oldColorName = product.colors.getOrElse(colorIndex) { "" }
-                        val newColors = product.colors.toMutableList().also {
-                            if (colorIndex in it.indices) it[colorIndex] = newColorName
-                        }
-                        val imageUrl = product.colorImages[oldColorName]
-                            ?: product.images.getOrElse(colorIndex) { "" }
-                        val newColorImages = product.colorImages.toMutableMap().also { m ->
-                            m.remove(oldColorName)
-                            m[newColorName] = imageUrl
-                        }
-                        lastProductOperation = "color"
-                        productViewModel.updateProductInSupabase(
-                            product.copy(colors = newColors, colorImages = newColorImages)
-                        )
-                    }
+                retailersState = allRetailers,
+                onApprove = { rId -> retailerViewModel.setRetailerApproval(rId, true) },
+                onRevoke  = { rId -> retailerViewModel.setRetailerApproval(rId, false) },
+                onRefresh = { retailerViewModel.loadAllRetailersForAdmin() },
+                onViewProducts = { retailer ->
+                    navController.navigate(
+                        Screen.AdminRetailerProducts.createRoute(retailer.id, retailer.storeName)
+                    )
                 }
             )
-            2 -> OrdersTab(
+            2 -> DeliveryPartnersTab(
                 modifier = Modifier.padding(padding),
-                orders = allOrders.filter {
-                    it.status != OrderStatus.RETURN_REQUESTED && it.status != OrderStatus.RETURNED
-                },
-                statusFilter = orderStatusFilter,
-                onFilterChange = { orderStatusFilter = it },
-                expandedOrderId = expandedOrderId,
-                onExpandToggle = { id -> expandedOrderId = if (expandedOrderId == id) null else id },
-                onUpdateStatus = { order -> orderToUpdate = order; showStatusDialog = true }
-            )
-            3 -> ReturnsTab(
-                modifier = Modifier.padding(padding),
-                orders = allOrders,
-                onSubmitReview = { orderId, reviewNote ->
-                    orderViewModel.acceptReturn(orderId, reviewNote)
-                },
-                onRejectReturn = { orderId, reviewNote ->
-                    orderViewModel.rejectReturn(orderId, reviewNote)
-                },
-                onReturnMoney = { orderId ->
-                    orderViewModel.processReturnRefund(orderId)
-                }
+                partnersState = allDeliveryPartners,
+                onApprove = { pId -> deliveryViewModel.setDeliveryPartnerApproval(pId, true) },
+                onRevoke  = { pId -> deliveryViewModel.setDeliveryPartnerApproval(pId, false) },
+                onRefresh = { deliveryViewModel.loadAllDeliveryPartnersForAdmin() }
             )
         }
     }
@@ -409,193 +274,103 @@ fun AdminDashboardScreen(
 @Composable
 private fun OverviewTab(
     modifier: Modifier,
-    products: List<ProductEntity>,
-    orders: List<Order>,
-    onNavigateToProducts: () -> Unit,
-    onNavigateToOrders: () -> Unit,
-    onAddProduct: () -> Unit,
+    vaultSummary: Resource<com.example.nextgenecommerce.data.models.VaultSummary>?,
     onNavigateToRevenue: () -> Unit,
-    onNavigateToSales: () -> Unit
+    onRefreshVault: () -> Unit
 ) {
-    // ─── Revenue calculation logic ──────────────────────────────────────────
-    // We only deduct if the payment has actually been refunded.
-    // Rejected returns (RETURN_REJECTED) should NOT be removed from revenue.
-    val totalRevenue = orders.filter {
-        it.paymentStatus != PaymentStatus.FAILED &&
-        it.status != OrderStatus.CANCELLED &&
-        it.paymentStatus != PaymentStatus.REFUNDED
-    }.sumOf { it.total }
-
-    val pendingOrders = orders.count { it.status == OrderStatus.PENDING }
-    val deliveredOrders = orders.count { it.status == OrderStatus.DELIVERED }
-    val processingOrders = orders.count { it.status == OrderStatus.PROCESSING || it.status == OrderStatus.CONFIRMED || it.status == OrderStatus.SHIPPED }
-    val recentOrders = orders.sortedByDescending { it.createdAt }.take(5)
-
-    // ─── Sales stats ────────────────────────────────────────────────────────
-    val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-    val totalItemsSold = activeOrders.sumOf { it.items.sumOf { item -> item.quantity } }
-    val returnedItemsCount = orders.filter { it.status == OrderStatus.RETURNED || it.paymentStatus == PaymentStatus.REFUNDED }
-        .sumOf { it.items.sumOf { item -> item.quantity } }
+    val totalCommission = (vaultSummary as? Resource.Success)?.data?.total ?: 0.0
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Revenue card
         item {
             RevenueCard(
-                totalRevenue = totalRevenue, 
-                orderCount = orders.size,
+                totalRevenue = totalCommission,
                 onClick = onNavigateToRevenue
             )
         }
-
-        // Sales card
         item {
-            SalesCard(
-                totalItemsSold = totalItemsSold,
-                returnedItems = returnedItemsCount,
-                deliveredCount = deliveredOrders,
-                onClick = onNavigateToSales
-            )
+            AdminVaultCard(vaultSummary = vaultSummary, onRefresh = onRefreshVault)
         }
-
-        // Stats grid
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Products",
-                    value = products.size.toString(),
-                    icon = Icons.Default.Inventory,
-                    iconColor = Color(0xFF6750A4),
-                    subtitle = "${products.count { it.isFeatured }} featured",
-                    onClick = onNavigateToProducts
-                )
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Pending",
-                    value = pendingOrders.toString(),
-                    icon = Icons.Default.Schedule,
-                    iconColor = Color(0xFFF57C00),
-                    subtitle = "need attention",
-                    onClick = onNavigateToOrders
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Processing",
-                    value = processingOrders.toString(),
-                    icon = Icons.Default.LocalShipping,
-                    iconColor = Color(0xFF0288D1),
-                    subtitle = "in transit",
-                    onClick = onNavigateToOrders
-                )
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Delivered",
-                    value = deliveredOrders.toString(),
-                    icon = Icons.Default.CheckCircle,
-                    iconColor = Color(0xFF388E3C),
-                    subtitle = "completed",
-                    onClick = onNavigateToOrders
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Out of Stock",
-                    value = products.count { it.stock <= 0 }.toString(),
-                    icon = Icons.Default.Warning,
-                    iconColor = Color(0xFFD32F2F),
-                    subtitle = "restock needed",
-                    onClick = onNavigateToProducts
-                )
-                DashboardStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "New Arrivals",
-                    value = products.count { it.isNew }.toString(),
-                    icon = Icons.Default.NewReleases,
-                    iconColor = Color(0xFF7B1FA2),
-                    subtitle = "tagged as new",
-                    onClick = onNavigateToProducts
-                )
-            }
-        }
-
-        // Quick actions
-        item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Quick Actions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onAddProduct,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Add Product")
-                        }
-                        OutlinedButton(
-                            onClick = onNavigateToOrders,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Default.FormatListBulleted, null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("All Orders")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Recent orders
-        if (recentOrders.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Recent Orders",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = onNavigateToOrders) { Text("See All") }
-                }
-            }
-            items(recentOrders) { order ->
-                RecentOrderRow(order = order, onTap = onNavigateToOrders)
-            }
-        }
-
         item { Spacer(modifier = Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-private fun RevenueCard(totalRevenue: Double, orderCount: Int, onClick: () -> Unit) {
+private fun AdminVaultCard(
+    vaultSummary: Resource<com.example.nextgenecommerce.data.models.VaultSummary>?,
+    onRefresh: () -> Unit
+) {
+    val pkrFormat = NumberFormat.getNumberInstance(Locale.US)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20))
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.AccountBalance, null, tint = Color(0xFF81C784), modifier = Modifier.size(22.dp))
+                    Text("Admin Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                }
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, null, tint = Color(0xFF81C784), modifier = Modifier.size(20.dp))
+                }
+            }
+
+            when (vaultSummary) {
+                null, is Resource.Loading -> {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Color(0xFF81C784), trackColor = Color(0xFF2E7D32))
+                }
+                is Resource.Error -> {
+                    Text(
+                        "Unable to load commission data",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color(0xFFEF9A9A)
+                    )
+                    Text(
+                        vaultSummary.message ?: "Ensure the admin_commissions table exists in Supabase",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFFEF9A9A).copy(alpha = 0.8f)
+                    )
+                    TextButton(onClick = onRefresh) {
+                        Icon(Icons.Default.Refresh, null, tint = Color(0xFF81C784), modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Retry", color = Color(0xFF81C784))
+                    }
+                }
+                is Resource.Success -> {
+                    val data = vaultSummary.data ?: com.example.nextgenecommerce.data.models.VaultSummary(0.0, 0.0, 0.0)
+                    Text(
+                        "PKR ${pkrFormat.format(data.total.toLong())}",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = Color.White
+                    )
+                    Divider(color = Color(0xFF2E7D32))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("Retailer (5%)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA5D6A7))
+                            Text("PKR ${pkrFormat.format(data.retailerCommission.toLong())}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Delivery (2%)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA5D6A7))
+                            Text("PKR ${pkrFormat.format(data.deliveryCommission.toLong())}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RevenueCard(totalRevenue: Double, onClick: () -> Unit) {
     val pkrFormat = NumberFormat.getNumberInstance(Locale.US)
     Card(
         modifier = Modifier
@@ -626,7 +401,7 @@ private fun RevenueCard(totalRevenue: Double, orderCount: Int, onClick: () -> Un
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "Total Revenue",
+                        "Total Commission",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
                     )
@@ -639,7 +414,7 @@ private fun RevenueCard(totalRevenue: Double, orderCount: Int, onClick: () -> Un
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "from $orderCount orders (excl. cancelled)",
+                    "Tap to see commission breakdown",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                 )
@@ -861,9 +636,12 @@ private fun ProductsTab(
     onFilterChange: (String) -> Unit,
     onEdit: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onAssignToNextGen: () -> Unit,
+    onAssignToSaif: () -> Unit,
     onColorChange: (productId: String, colorIndex: Int, newColorName: String) -> Unit,
 ) {
     val filters = listOf("All", "Featured", "New", "Out of Stock")
+
     val filtered = products
         .filter { p ->
             if (searchQuery.isBlank()) true
@@ -880,6 +658,78 @@ private fun ProductsTab(
         }
 
     Column(modifier = modifier.fillMaxSize()) {
+        // Next Gen Ecommerce assign card
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable { onAssignToNextGen() },
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF2E7D32),
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Store, null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Assign All to Next Gen Ecommerce",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                    Text(
+                        "Move all products to Next Gen Ecommerce store",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Color.White)
+            }
+        }
+
+        // Saif Retailers assign card
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .clickable { onAssignToSaif() },
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF1565C0),
+            tonalElevation = 2.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Store, null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Assign All to Saif Retailers",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                    Text(
+                        "Move all products to Saif Retailers store",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Color.White)
+            }
+        }
+
         // Search bar
         OutlinedTextField(
             value = searchQuery,
@@ -961,7 +811,6 @@ private fun ProductsTab(
                         isFeatured = product.isFeatured,
                         isNew = product.isNew,
                         brand = product.brand,
-                        category = product.category.name,
                         colors = product.colors,
                         onEdit = { onEdit(product.id) },
                         onDelete = { onDelete(product.id) },
@@ -988,9 +837,12 @@ private fun OrdersTab(
     onExpandToggle: (String) -> Unit,
     onUpdateStatus: (Order) -> Unit
 ) {
-    val statuses = listOf(null) + OrderStatus.values().filter {
-        it != OrderStatus.RETURN_REQUESTED && it != OrderStatus.RETURNED
-    }
+    val returnStatuses = setOf(
+        OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+        OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED,
+        OrderStatus.RETURNED, OrderStatus.RETURN_REJECTED
+    )
+    val statuses = listOf(null) + OrderStatus.values().filter { it !in returnStatuses }
     val filtered = if (statusFilter == null) orders else orders.filter { it.status == statusFilter }
     val sorted = filtered.sortedByDescending { it.createdAt }
 
@@ -1203,26 +1055,53 @@ private fun AdminOrderCard(
                         )
                     }
 
-                    // Payment info
+                    // Payment info — rich badge
                     Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            "Payment: ${order.paymentMethod.name.replace("_", " ")}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            order.paymentStatus.name,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = when (order.paymentStatus.name) {
-                                "COMPLETED" -> Color(0xFF388E3C)
-                                "FAILED" -> Color(0xFFD32F2F)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
+                        // Payment method icon + label
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val isSafepay = order.paymentMethod == com.example.nextgenecommerce.data.models.PaymentMethod.SAFEPAY
+                            Icon(
+                                if (isSafepay) Icons.Default.Lock else Icons.Default.Money,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = if (isSafepay) Color(0xFF00C853) else Color(0xFFF57C00)
+                            )
+                            Text(
+                                if (isSafepay) "Safepay" else "Cash on Delivery",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // Payment status chip
+                        val (statusColor, statusLabel) = when (order.paymentStatus) {
+                            PaymentStatus.COMPLETED -> Pair(Color(0xFF2E7D32), "✓ PAID")
+                            PaymentStatus.PENDING   -> Pair(Color(0xFFF57C00), "⧖ PENDING")
+                            PaymentStatus.FAILED    -> Pair(Color(0xFFD32F2F), "✗ FAILED")
+                            PaymentStatus.REFUNDED  -> Pair(Color(0xFF6A1B9A), "↩ REFUNDED")
+                        }
+                        Surface(
+                            color = statusColor.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Text(
+                                if (order.paymentMethod == com.example.nextgenecommerce.data.models.PaymentMethod.CASH_ON_DELIVERY
+                                    && order.paymentStatus == PaymentStatus.PENDING) "💵 COD"
+                                else statusLabel,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (order.paymentMethod == com.example.nextgenecommerce.data.models.PaymentMethod.CASH_ON_DELIVERY
+                                    && order.paymentStatus == PaymentStatus.PENDING) Color(0xFFF57C00)
+                                else statusColor
+                            )
+                        }
                     }
 
                     // Update status button
@@ -1270,9 +1149,7 @@ private fun OrderPriceRow(label: String, value: String, bold: Boolean = false) {
 private fun OrderStatusDialog(
     order: Order,
     onDismiss: () -> Unit,
-    onConfirm: (OrderStatus) -> Unit,
-    onAcceptReturn: (String) -> Unit = {},
-    onProcessRefund: () -> Unit = {}
+    onConfirm: (OrderStatus) -> Unit
 ) {
     // ── Customer cancelled: admin only accepts ────────────────────────────────
     if (order.status == OrderStatus.CANCELLED) {
@@ -1314,9 +1191,12 @@ private fun OrderStatusDialog(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Order #${order.orderNumber}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(4.dp))
-                OrderStatus.values().filter {
-                    it != OrderStatus.RETURN_REQUESTED && it != OrderStatus.RETURNED
-                }.forEach { status ->
+                val returnStatusSet = setOf(
+                    OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+                    OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED,
+                    OrderStatus.RETURNED, OrderStatus.RETURN_REJECTED
+                )
+                OrderStatus.values().filter { it !in returnStatusSet }.forEach { status ->
                     val isSelected = selectedStatus == status
                     val statusColor = orderStatusColor(status)
                     Row(
@@ -1362,7 +1242,10 @@ private fun ReturnsTab(
     onReturnMoney: (orderId: String) -> Unit
 ) {
     val pendingReturns = orders
-        .filter { it.status == OrderStatus.RETURN_REQUESTED }
+        .filter { it.status in setOf(
+            OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+            OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED
+        ) }
         .sortedByDescending { it.updatedAt }
     val reviewedReturns = orders
         .filter { it.status == OrderStatus.RETURNED || it.status == OrderStatus.RETURN_REJECTED }
@@ -1769,6 +1652,333 @@ private fun ReviewedReturnCard(
     }
 }
 
+// ─── Retailers Tab ────────────────────────────────────────────────────────────
+
+@Composable
+private fun RetailersTab(
+    modifier: Modifier,
+    retailersState: Resource<List<Retailer>>,
+    onApprove: (String) -> Unit,
+    onRevoke: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onViewProducts: (Retailer) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var pendingApprovalId by remember { mutableStateOf<String?>(null) }
+    var pendingApprove by remember { mutableStateOf(true) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmDialog && pendingApprovalId != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            icon = {
+                Icon(
+                    if (pendingApprove) Icons.Default.VerifiedUser else Icons.Default.Block,
+                    null,
+                    tint = if (pendingApprove) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(if (pendingApprove) "Approve Retailer" else "Revoke Approval") },
+            text = {
+                Text(
+                    if (pendingApprove)
+                        "This retailer will be able to upload and manage products."
+                    else
+                        "This retailer will no longer be able to upload or manage products."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pendingApprove) onApprove(pendingApprovalId!!)
+                        else onRevoke(pendingApprovalId!!)
+                        showConfirmDialog = false
+                    },
+                    colors = if (pendingApprove)
+                        ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    else
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text(if (pendingApprove) "Approve" else "Revoke") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfirmDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Header bar
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val count = (retailersState as? Resource.Success)?.data?.size ?: 0
+                val unverified = (retailersState as? Resource.Success)?.data?.count { !it.isVerified } ?: 0
+                Column {
+                    Text("$count Retailers", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    if (unverified > 0) {
+                        Text("$unverified pending approval", style = MaterialTheme.typography.labelSmall, color = Color(0xFFE65100))
+                    }
+                }
+                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, null) }
+            }
+        }
+
+        // Search
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            placeholder = { Text("Search retailers…") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, null) }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        when (retailersState) {
+            is Resource.Loading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            is Resource.Error -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
+                        Text(retailersState.message ?: "Failed to load retailers", style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = onRefresh) { Text("Retry") }
+                    }
+                }
+            }
+            is Resource.Success -> {
+                val list = (retailersState.data ?: emptyList())
+                    .filter { if (searchQuery.isBlank()) true else it.storeName.contains(searchQuery, ignoreCase = true) || it.contactPhone.contains(searchQuery) }
+                    .sortedWith(compareBy({ it.isVerified }, { it.storeName }))
+
+                if (list.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.Store, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                            Text("No retailers found", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(list, key = { it.id }) { retailer ->
+                            RetailerAdminCard(
+                                retailer = retailer,
+                                onApprove = {
+                                    pendingApprovalId = retailer.id
+                                    pendingApprove = true
+                                    showConfirmDialog = true
+                                },
+                                onRevoke = {
+                                    pendingApprovalId = retailer.id
+                                    pendingApprove = false
+                                    showConfirmDialog = true
+                                },
+                                onViewProducts = { onViewProducts(retailer) }
+                            )
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RetailerAdminCard(
+    retailer: Retailer,
+    onApprove: () -> Unit,
+    onRevoke: () -> Unit,
+    onViewProducts: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+    val createdDate = runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).parse(retailer.createdAt)
+    }.getOrNull()
+    var isExpanded by remember { mutableStateOf(false) }
+    var fullScreenUrl by remember { mutableStateOf<String?>(null) }
+
+    fullScreenUrl?.let { url ->
+        Dialog(
+            onDismissRequest = { fullScreenUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { fullScreenUrl = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { fullScreenUrl = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) { Icon(Icons.Default.Close, null, tint = Color.White) }
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // ── Header row (always visible, tap to expand) ──────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (retailer.isVerified) Color(0xFF2E7D32).copy(alpha = 0.1f) else Color(0xFFE65100).copy(alpha = 0.1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (retailer.storeLogoUrl != null) {
+                            AsyncImage(model = retailer.storeLogoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Text(retailer.storeName.take(1).uppercase(), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = if (retailer.isVerified) Color(0xFF2E7D32) else Color(0xFFE65100))
+                        }
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(retailer.storeName, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (retailer.isVerified) Icon(Icons.Default.Verified, null, modifier = Modifier.size(14.dp), tint = Color(0xFF1E88E5))
+                    }
+                    if (retailer.contactPhone.isNotBlank()) {
+                        Text(retailer.contactPhone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (createdDate != null) {
+                        Text("Joined ${dateFormat.format(createdDate)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    }
+                }
+                val (badgeColor, badgeLabel) = when {
+                    retailer.isVerified -> Color(0xFF2E7D32) to "Approved"
+                    retailer.isRejected -> MaterialTheme.colorScheme.error to "Rejected"
+                    else                -> Color(0xFFE65100) to "Pending"
+                }
+                Surface(shape = RoundedCornerShape(20.dp), color = badgeColor.copy(alpha = 0.12f)) {
+                    Text(badgeLabel, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = badgeColor)
+                }
+                Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
+
+            // ── Expandable details section ───────────────────────────────────────
+            AnimatedVisibility(visible = isExpanded, enter = expandVertically(tween(200)), exit = shrinkVertically(tween(200))) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                    if (retailer.storeDescription.isNotBlank()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Info, null, modifier = Modifier.size(14.dp).padding(top = 2.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(retailer.storeDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                    if (retailer.storeAddress.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(retailer.storeAddress, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+
+                    // Verification images
+                    if (retailer.verificationImages.isNotEmpty()) {
+                        Text("Verification Documents  (${retailer.verificationImages.size})", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(retailer.verificationImages) { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(90.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { fullScreenUrl = url },
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.BrokenImage, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("No verification documents uploaded", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+            // ── Action buttons ───────────────────────────────────────────────────
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val approveActive = retailer.isVerified
+                val rejectActive  = retailer.isRejected
+                val green = Color(0xFF2E7D32)
+                val red   = MaterialTheme.colorScheme.error
+                Button(
+                    onClick = onApprove, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), enabled = !approveActive,
+                    colors = ButtonDefaults.buttonColors(containerColor = green, contentColor = Color.White, disabledContainerColor = green.copy(alpha = 0.35f), disabledContentColor = Color.White.copy(alpha = 0.6f))
+                ) {
+                    Icon(if (approveActive) Icons.Default.CheckCircle else Icons.Default.VerifiedUser, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (approveActive) "Approved" else "Approve", fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(
+                    onClick = onRevoke, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp), enabled = !rejectActive,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = red, disabledContentColor = red.copy(alpha = 0.35f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (rejectActive) red.copy(alpha = 0.35f) else red)
+                ) {
+                    Icon(if (rejectActive) Icons.Default.Cancel else Icons.Default.Block, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (rejectActive) "Rejected" else "Reject", fontWeight = FontWeight.SemiBold)
+                }
+            }
+            OutlinedButton(onClick = onViewProducts, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+                Icon(Icons.Default.Inventory, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("View Products", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 @Composable
@@ -1801,24 +2011,30 @@ fun orderStatusColor(status: OrderStatus): Color = when (status) {
     OrderStatus.OUT_FOR_DELIVERY -> Color(0xFF558B2F)
     OrderStatus.DELIVERED -> Color(0xFF388E3C)
     OrderStatus.CANCELLED -> Color(0xFFD32F2F)
-    OrderStatus.RETURN_REQUESTED -> Color(0xFF6A1B9A)
-    OrderStatus.RETURNED -> Color(0xFF6D4C41)
-    OrderStatus.RETURN_REJECTED -> Color(0xFFD32F2F)
+    OrderStatus.RETURN_REQUESTED  -> Color(0xFF6A1B9A)
+    OrderStatus.RETURN_APPROVED   -> Color(0xFF2E7D32)
+    OrderStatus.RETURN_IN_TRANSIT -> Color(0xFF1565C0)
+    OrderStatus.RETURN_RECEIVED   -> Color(0xFF00838F)
+    OrderStatus.RETURNED          -> Color(0xFF6D4C41)
+    OrderStatus.RETURN_REJECTED   -> Color(0xFFD32F2F)
 }
 
 fun orderStatusIcon(status: OrderStatus): ImageVector = when (status) {
-    OrderStatus.PENDING -> Icons.Default.Schedule
-    OrderStatus.CONFIRMED -> Icons.Default.CheckCircleOutline
-    OrderStatus.PROCESSING -> Icons.Default.Refresh
-    OrderStatus.PACKED -> Icons.Default.Inventory
-    OrderStatus.READY_FOR_PICKUP -> Icons.Default.Store
-    OrderStatus.SHIPPED -> Icons.Default.LocalShipping
-    OrderStatus.OUT_FOR_DELIVERY -> Icons.Default.LocalShipping
-    OrderStatus.DELIVERED -> Icons.Default.CheckCircle
-    OrderStatus.CANCELLED -> Icons.Default.Cancel
-    OrderStatus.RETURN_REQUESTED -> Icons.Default.AssignmentReturn
-    OrderStatus.RETURNED -> Icons.Default.Undo
-    OrderStatus.RETURN_REJECTED -> Icons.Default.Cancel
+    OrderStatus.PENDING            -> Icons.Default.Schedule
+    OrderStatus.CONFIRMED          -> Icons.Default.CheckCircleOutline
+    OrderStatus.PROCESSING         -> Icons.Default.Refresh
+    OrderStatus.PACKED             -> Icons.Default.Inventory
+    OrderStatus.READY_FOR_PICKUP   -> Icons.Default.Store
+    OrderStatus.SHIPPED            -> Icons.Default.LocalShipping
+    OrderStatus.OUT_FOR_DELIVERY   -> Icons.Default.LocalShipping
+    OrderStatus.DELIVERED          -> Icons.Default.CheckCircle
+    OrderStatus.CANCELLED          -> Icons.Default.Cancel
+    OrderStatus.RETURN_REQUESTED   -> Icons.Default.AssignmentReturn
+    OrderStatus.RETURN_APPROVED    -> Icons.Default.CheckCircle
+    OrderStatus.RETURN_IN_TRANSIT  -> Icons.Default.TwoWheeler
+    OrderStatus.RETURN_RECEIVED    -> Icons.Default.Inbox
+    OrderStatus.RETURNED           -> Icons.Default.Undo
+    OrderStatus.RETURN_REJECTED    -> Icons.Default.Cancel
 }
 
 // ─── Product Admin Card ───────────────────────────────────────────────────────
@@ -1832,7 +2048,6 @@ fun ProductAdminCard(
     isFeatured: Boolean = false,
     isNew: Boolean = false,
     brand: String = "",
-    category: String = "",
     colors: List<String> = emptyList(),
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -1966,6 +2181,293 @@ fun ProductAdminCard(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+// ─── Delivery Partners Tab ───────────────────────────────────────────────────
+
+@Composable
+private fun DeliveryPartnersTab(
+    modifier: Modifier,
+    partnersState: Resource<List<DeliveryPartner>>,
+    onApprove: (String) -> Unit,
+    onRevoke: (String) -> Unit,
+    onRefresh: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var pendingApprovalId by remember { mutableStateOf<String?>(null) }
+    var pendingApprove by remember { mutableStateOf(true) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmDialog && pendingApprovalId != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            icon = {
+                Icon(
+                    if (pendingApprove) Icons.Default.VerifiedUser else Icons.Default.Block,
+                    null,
+                    tint = if (pendingApprove) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(if (pendingApprove) "Approve Delivery Partner" else "Revoke Approval") },
+            text = {
+                Text(
+                    if (pendingApprove)
+                        "This delivery partner will become the active platform-wide courier. Any existing active partner will be automatically revoked and their in-progress orders reassigned."
+                    else
+                        "This delivery partner will lose access and can no longer accept or manage deliveries."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pendingApprove) onApprove(pendingApprovalId!!)
+                        else onRevoke(pendingApprovalId!!)
+                        showConfirmDialog = false
+                    },
+                    colors = if (pendingApprove)
+                        ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    else
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text(if (pendingApprove) "Approve" else "Revoke") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showConfirmDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val count = (partnersState as? Resource.Success)?.data?.size ?: 0
+                val active = (partnersState as? Resource.Success)?.data?.count { it.isVerified } ?: 0
+                val pending = (partnersState as? Resource.Success)?.data?.count { !it.isVerified } ?: 0
+                Column {
+                    Text("$count Delivery Partners", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (active > 0) Text("$active active", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32))
+                        if (pending > 0) Text("$pending pending", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1565C0))
+                    }
+                }
+                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, null) }
+            }
+        }
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            placeholder = { Text("Search delivery partners…") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, null) }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        when (partnersState) {
+            is Resource.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            is Resource.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.ErrorOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.error)
+                    Text(partnersState.message ?: "Failed to load", style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = onRefresh) { Text("Retry") }
+                }
+            }
+            is Resource.Success -> {
+                val list = (partnersState.data ?: emptyList())
+                    .filter { if (searchQuery.isBlank()) true else it.companyName.contains(searchQuery, ignoreCase = true) || it.contactPerson.contains(searchQuery, ignoreCase = true) }
+                    .sortedWith(compareBy({ it.isVerified }, { it.companyName }))
+
+                if (list.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Default.LocalShipping, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                            Text("No delivery partners yet", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(list, key = { it.id }) { partner ->
+                            DeliveryPartnerAdminCard(
+                                partner = partner,
+                                onApprove = {
+                                    pendingApprovalId = partner.id
+                                    pendingApprove = true
+                                    showConfirmDialog = true
+                                },
+                                onRevoke = {
+                                    pendingApprovalId = partner.id
+                                    pendingApprove = false
+                                    showConfirmDialog = true
+                                }
+                            )
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeliveryPartnerAdminCard(
+    partner: DeliveryPartner,
+    onApprove: () -> Unit,
+    onRevoke: () -> Unit
+) {
+    val approvedColor = Color(0xFF2E7D32)
+    val pendingColor  = Color(0xFF1565C0)
+    var isExpanded    by remember { mutableStateOf(false) }
+    var fullScreenUrl by remember { mutableStateOf<String?>(null) }
+
+    fullScreenUrl?.let { url ->
+        Dialog(
+            onDismissRequest = { fullScreenUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { fullScreenUrl = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.Fit)
+                IconButton(
+                    onClick = { fullScreenUrl = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) { Icon(Icons.Default.Close, null, tint = Color.White) }
+            }
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // ── Header row ───────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(modifier = Modifier.size(48.dp), shape = RoundedCornerShape(10.dp), color = if (partner.isVerified) approvedColor.copy(alpha = 0.1f) else pendingColor.copy(alpha = 0.1f)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (partner.companyLogoUrl != null) {
+                            AsyncImage(model = partner.companyLogoUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        } else {
+                            Text(partner.companyName.take(1).uppercase(), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = if (partner.isVerified) approvedColor else pendingColor)
+                        }
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(partner.companyName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        val (badgeCol, badgeLbl) = when {
+                            partner.isVerified -> approvedColor to "ACTIVE"
+                            partner.isRejected -> MaterialTheme.colorScheme.error to "REJECTED"
+                            else               -> pendingColor to "PENDING"
+                        }
+                        Surface(color = badgeCol.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
+                            Text(badgeLbl, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = badgeCol)
+                        }
+                    }
+                    Text(partner.contactPerson, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(partner.contactPhone, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
+
+            // ── Expandable details ───────────────────────────────────────────────
+            AnimatedVisibility(visible = isExpanded, enter = expandVertically(tween(200)), exit = shrinkVertically(tween(200))) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                    if (partner.companyAddress.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(partner.companyAddress, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+                            Text("${partner.totalDeliveries} deliveries", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+                            Text(String.format("%.1f ★", partner.rating), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    // Verification images
+                    if (partner.verificationImages.isNotEmpty()) {
+                        Text("Verification Documents  (${partner.verificationImages.size})", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(partner.verificationImages) { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(90.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { fullScreenUrl = url },
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    } else {
+                        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.BrokenImage, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("No verification documents uploaded", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+            // ── Action buttons ───────────────────────────────────────────────────
+            val approveActive = partner.isVerified
+            val rejectActive  = partner.isRejected
+            val red = MaterialTheme.colorScheme.error
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onApprove, enabled = !approveActive, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = approvedColor, contentColor = Color.White, disabledContainerColor = approvedColor.copy(alpha = 0.35f), disabledContentColor = Color.White.copy(alpha = 0.6f))
+                ) {
+                    Icon(if (approveActive) Icons.Default.CheckCircle else Icons.Default.VerifiedUser, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (approveActive) "Approved" else "Approve", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onRevoke, enabled = !rejectActive, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = red, disabledContentColor = red.copy(alpha = 0.35f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (rejectActive) red.copy(alpha = 0.35f) else red)
+                ) {
+                    Icon(if (rejectActive) Icons.Default.Cancel else Icons.Default.Block, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (rejectActive) "Rejected" else "Reject", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }

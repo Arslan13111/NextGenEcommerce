@@ -7,6 +7,7 @@ import com.example.nextgenecommerce.data.repository.AddressRepository
 import com.example.nextgenecommerce.util.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.gotrue.Auth
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,9 @@ class AddressViewModel @Inject constructor(
     private val currentUserId: String
         get() = supabaseAuth.currentUserOrNull()?.id ?: ""
 
+    private var collectJob: Job? = null
+    private var loadedForUserId: String? = null
+
     init {
         loadAddresses()
     }
@@ -41,15 +45,24 @@ class AddressViewModel @Inject constructor(
     fun loadAddresses() {
         val userId = currentUserId
         if (userId.isEmpty()) return
-        viewModelScope.launch {
+        if (userId == loadedForUserId && _addresses.value.isNotEmpty()) return
+        loadedForUserId = userId
+
+        collectJob?.cancel()
+        collectJob = viewModelScope.launch {
             addressRepository.getUserAddresses(userId).collect {
                 _addresses.value = it
             }
         }
-        // Also sync from Supabase
         viewModelScope.launch {
             addressRepository.syncAddressesFromSupabase(userId).collect { }
         }
+    }
+
+    // Called from screens to ensure addresses are loaded with current auth
+    fun refreshAddresses() {
+        loadedForUserId = null
+        loadAddresses()
     }
 
     fun addAddress(address: Address) {

@@ -26,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.nextgenecommerce.presentation.components.ProductCard
+import com.example.nextgenecommerce.presentation.components.ProductSyncEffect
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.ProductViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.WishlistViewModel
@@ -39,6 +40,8 @@ fun AllProductsScreen(
 ) {
     val allProducts by viewModel.allProducts.collectAsStateWithLifecycle()
     val wishlistItems by wishlistViewModel.wishlistItems.collectAsStateWithLifecycle()
+
+    ProductSyncEffect(viewModel)
 
     var sortOption by remember { mutableStateOf("New") }
     var showSortSheet by remember { mutableStateOf(false) }
@@ -64,6 +67,7 @@ fun AllProductsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 Row(
@@ -123,7 +127,7 @@ fun AllProductsScreen(
                                     indication = null,
                                     interactionSource = remember { MutableInteractionSource() }
                                 ) { showSortSheet = true }
-                                .padding(end = 8.dp),
+                                .padding(8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -198,8 +202,9 @@ private fun AllProductsSortSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 24.dp)
         ) {
             Row(
                 modifier = Modifier

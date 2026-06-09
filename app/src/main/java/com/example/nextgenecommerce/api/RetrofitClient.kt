@@ -1,5 +1,6 @@
 package com.example.nextgenecommerce.api
 
+import com.example.nextgenecommerce.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -8,12 +9,14 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
-    // For Android Emulator use: http://10.0.2.2:3000/
-    // For Physical Device use: http://YOUR_LOCAL_IP:3000/
-    private const val BASE_URL = "http://192.168.100.58:3000/"
+    private val BASE_URL = BuildConfig.BACKEND_BASE_URL
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.ENABLE_HTTP_LOGGING) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
 
     private val okHttpClient = OkHttpClient.Builder()

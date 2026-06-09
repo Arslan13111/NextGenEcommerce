@@ -2,12 +2,7 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+/.idea/
 .DS_Store
 /build
 /captures
@@ -39,3 +34,9 @@ npm-debug.log*
 .claude/
 tmpclaude*/
 **/tmpclaude*/
+
+## Local generated metadata and debugging artifacts
+/gradle/gradle-daemon-jvm.properties
+/error*.jpeg
+/old_report.txt
+/template.txt

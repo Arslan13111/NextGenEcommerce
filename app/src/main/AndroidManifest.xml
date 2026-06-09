@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Push Notification Permission (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Storage Permissions -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
@@ -17,16 +20,9 @@
     <!-- Camera Permission -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- AR Core Permission -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
     <!-- Features -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-
-    <!-- ARCore Support -->
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
 
     <application
@@ -39,18 +35,13 @@
         android:roundIcon="@drawable/logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.NextGenEcommerce"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         tools:targetApi="31">
 
-        <!-- ARCore Metadata -->
-        <meta-data
-            android:name="com.google.ar.core"
-            android:value="optional" />
-
-        <!-- Snap Camera Kit API Token (Staging) -->
+        <!-- Snap Camera Kit API token is supplied from local.properties or CI. -->
         <meta-data
             android:name="com.snap.camerakit.api.token"
-            android:value="eyJhbGciOiJIUzI1NiIsImtpZCI6IkNhbnZhc1MyU0hNQUNQcm9kIiwidHlwIjoiSldUIn0.eyJhdWQiOiJjYW52YXMtY2FudmFzYXBpIiwiaXNzIjoiY2FudmFzLXMyc3Rva2VuIiwibmJmIjoxNzcwNzc2NjYzLCJzdWIiOiJiNDUzNzExMy01ZDIwLTQ3ODQtYTlhMS0zODhmZGNlNDdjN2J-U1RBR0lOR341YzFlODIxNi02NWRhLTRkMTgtODAzMC1lMWUzMGZiYzFiNDUifQ.XE4Jd6ALWUPu-DkG5oxb_RqQX7NpEDBXq0LKOYqdI8o" />
+            android:value="${snapCameraKitApiToken}" />
 
         <!-- Main Compose Activity (New Launcher) -->
         <activity
@@ -70,6 +61,15 @@
             android:exported="false"
             android:theme="@style/Theme.NextGenEcommerce"
             android:screenOrientation="portrait" />
+
+        <!-- Firebase Cloud Messaging Service -->
+        <service
+            android:name=".service.NextGenFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
     </application>
 

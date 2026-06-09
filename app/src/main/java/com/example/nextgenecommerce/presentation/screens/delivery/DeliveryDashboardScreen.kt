@@ -2,6 +2,8 @@ package com.example.nextgenecommerce.presentation.screens.delivery
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -16,6 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -25,7 +31,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.nextgenecommerce.data.models.*
 import com.example.nextgenecommerce.data.repository.EarningsStats
+import com.example.nextgenecommerce.data.repository.RetailerStoreInfo
 import com.example.nextgenecommerce.presentation.navigation.Screen
+import com.example.nextgenecommerce.presentation.screens.retailer.RejectedScreen
 import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.DeliveryViewModel
 import com.example.nextgenecommerce.util.Resource
@@ -45,14 +53,17 @@ fun DeliveryDashboardScreen(
     authViewModel: AuthViewModel = hiltViewModel(),
     deliveryViewModel: DeliveryViewModel = hiltViewModel()
 ) {
-    val currentUser     by authViewModel.currentUser.collectAsState()
-    val profile         by deliveryViewModel.profile.collectAsState()
-    val profileState    by deliveryViewModel.profileState.collectAsState()
-    val availableOrders by deliveryViewModel.availableOrders.collectAsState()
-    val myOrders        by deliveryViewModel.myOrders.collectAsState()
-    val earningsStats   by deliveryViewModel.earningsStats.collectAsState()
-    val deliveryHistory by deliveryViewModel.deliveryHistory.collectAsState()
-    val actionState     by deliveryViewModel.actionState.collectAsState()
+    val currentUser            by authViewModel.currentUser.collectAsState()
+    val profile                by deliveryViewModel.profile.collectAsState()
+    val profileState           by deliveryViewModel.profileState.collectAsState()
+    val availableOrders        by deliveryViewModel.availableOrders.collectAsState()
+    val myOrders               by deliveryViewModel.myOrders.collectAsState()
+    val earningsStats          by deliveryViewModel.earningsStats.collectAsState()
+    val deliveryHistory        by deliveryViewModel.deliveryHistory.collectAsState()
+    val availableReturnOrders  by deliveryViewModel.availableReturnOrders.collectAsState()
+    val myReturnOrders         by deliveryViewModel.myReturnOrders.collectAsState()
+    val retailerInfoMap        by deliveryViewModel.retailerInfoMap.collectAsState()
+    val actionState            by deliveryViewModel.actionState.collectAsState()
 
     var selectedTab       by remember { mutableIntStateOf(0) }
     var showCreateProfile by remember { mutableStateOf(false) }
@@ -69,9 +80,32 @@ fun DeliveryDashboardScreen(
 
     if (showCreateProfile) {
         CreateProfileDialog(
-            onConfirm = { n, p, a, ph -> deliveryViewModel.createProfile(n, p, a, ph); showCreateProfile = false },
+            onConfirm = { n, p, a, ph, images -> deliveryViewModel.createProfile(n, p, a, ph, images); showCreateProfile = false },
             onDismiss = { showCreateProfile = false }
         )
+    }
+
+    // Block access when not yet approved or explicitly rejected
+    val currentProfile = profile
+    if (currentProfile != null && !currentProfile.isVerified) {
+        if (currentProfile.isRejected) {
+            RejectedScreen(
+                role = "Delivery Partner",
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            )
+        } else {
+            AwaitingApprovalScreen(
+                profile = currentProfile,
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Screen.Login.route) { popUpTo(0) { inclusive = true } }
+                }
+            )
+        }
+        return
     }
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
@@ -142,7 +176,7 @@ fun DeliveryDashboardScreen(
             }
 
             StatsStrip(earningsStats)
-            val tabs = listOf("Overview", "Available", "Active", "History", "Profile")
+            val tabs = listOf("Overview", "Available", "Active", "Returns", "History", "Profile")
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 edgePadding = 0.dp,
@@ -160,10 +194,11 @@ fun DeliveryDashboardScreen(
             }
             when (selectedTab) {
                 0 -> OverviewTab(earningsStats, myOrders) { deliveryViewModel.refreshAll() }
-                1 -> AvailableTab(availableOrders, deliveryViewModel) { deliveryViewModel.refreshAvailableOrders() }
+                1 -> AvailableTab(availableOrders, deliveryViewModel, profile?.isAvailable == true) { deliveryViewModel.refreshAvailableOrders() }
                 2 -> ActiveTab(myOrders, deliveryViewModel) { deliveryViewModel.refreshMyOrders() }
-                3 -> HistoryTab(deliveryHistory) { deliveryViewModel.refreshDeliveryHistory() }
-                4 -> ProfileTab(profile, currentUser, deliveryViewModel, authViewModel, navController)
+                3 -> ReturnsTab(availableReturnOrders, myReturnOrders, retailerInfoMap, deliveryViewModel) { deliveryViewModel.refreshReturnOrders() }
+                4 -> HistoryTab(deliveryHistory) { deliveryViewModel.refreshDeliveryHistory() }
+                5 -> ProfileTab(profile, currentUser, deliveryViewModel, authViewModel, navController)
             }
         }
     }
@@ -240,7 +275,7 @@ private fun OverviewTab(stats: Resource<EarningsStats>, myOrders: Resource<List<
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricCard("Active Jobs", "${active.size}", Icons.Default.DirectionsBike, DPrimary, Modifier.weight(1f))
+                MetricCard("Active Jobs", "${active.size}", Icons.Default.TwoWheeler, DPrimary, Modifier.weight(1f))
                 MetricCard("Rating",      String.format("%.1f", s.rating), Icons.Default.Star, DGold, Modifier.weight(1f))
             }
         }
@@ -299,7 +334,39 @@ private fun CompactOrderRow(order: Order) {
 // ── Available Tab ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun AvailableTab(state: Resource<List<Order>>, deliveryViewModel: DeliveryViewModel, onRefresh: () -> Unit) {
+private fun AvailableTab(state: Resource<List<Order>>, deliveryViewModel: DeliveryViewModel, isOnline: Boolean, onRefresh: () -> Unit) {
+    if (!isOnline) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Box(
+                    Modifier.size(80.dp).background(Color.Gray.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.WifiTetheringOff, null, modifier = Modifier.size(40.dp), tint = Color.Gray)
+                }
+                Text("You are Offline", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "Go online to see available orders for pickup.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Button(
+                    onClick = { deliveryViewModel.setAvailability(true) },
+                    colors = ButtonDefaults.buttonColors(containerColor = DSuccess)
+                ) {
+                    Icon(Icons.Default.WifiTethering, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Go Online", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        return
+    }
     when (state) {
         is Resource.Loading -> LoadingState()
         is Resource.Error   -> ErrorState(state.message ?: "Error", onRefresh)
@@ -307,8 +374,16 @@ private fun AvailableTab(state: Resource<List<Order>>, deliveryViewModel: Delive
             val list = state.data ?: emptyList()
             if (list.isEmpty()) EmptyState("No orders awaiting pickup.\nCheck back soon!", Icons.Default.LocalShipping)
             else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(list, key = { it.id }) { order -> 
-                    AvailableOrderCard(order) { deliveryViewModel.acceptOrder(order.id) } 
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("${list.size} order(s) available", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+                items(list, key = { it.id }) { order ->
+                    AvailableOrderCard(order) { deliveryViewModel.acceptOrder(order.id) }
                 }
             }
         }
@@ -385,8 +460,16 @@ private fun ActiveTab(state: Resource<List<Order>>, deliveryViewModel: DeliveryV
         is Resource.Error   -> ErrorState(state.message ?: "Error", onRefresh)
         is Resource.Success -> {
             if (active.isEmpty())
-                EmptyState("No active deliveries.\nAccept an order to get started!", Icons.Default.DirectionsBike)
+                EmptyState("No active deliveries.\nAccept an order to get started!", Icons.Default.TwoWheeler)
             else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("${active.size} active delivery(s)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
                 items(active, key = { it.id }) { ActiveOrderCard(it, deliveryViewModel) }
             }
         }
@@ -448,7 +531,7 @@ private fun ActiveOrderCard(order: Order, deliveryViewModel: DeliveryViewModel) 
                     modifier = Modifier.fillMaxWidth(),
                     colors   = ButtonDefaults.buttonColors(containerColor = DPrimary)
                 ) {
-                    Icon(Icons.Default.DirectionsBike, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.TwoWheeler, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Start Delivery (Out for Delivery)", fontWeight = FontWeight.Bold)
                 }
@@ -468,6 +551,215 @@ private fun ActiveOrderCard(order: Order, deliveryViewModel: DeliveryViewModel) 
 }
 
 // ── History Tab ───────────────────────────────────────────────────────────────
+
+// ── Returns Tab ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReturnsTab(
+    available: Resource<List<Order>>,
+    inTransit: Resource<List<Order>>,
+    retailerInfoMap: Map<String, RetailerStoreInfo>,
+    deliveryViewModel: DeliveryViewModel,
+    onRefresh: () -> Unit
+) {
+    val availableList = (available as? Resource.Success)?.data ?: emptyList()
+    val inTransitList = (inTransit as? Resource.Success)?.data ?: emptyList()
+    val combined = inTransitList + availableList
+
+    if (combined.isEmpty() && available !is Resource.Loading && inTransit !is Resource.Loading) {
+        EmptyState("No return orders right now.\nCheck back later!", Icons.Default.AssignmentReturn)
+        return
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Return Orders", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        if (inTransitList.isNotEmpty()) {
+            item {
+                Text(
+                    "In Transit (${inTransitList.size})",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = DInfo,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(inTransitList, key = { "transit_${it.id}" }) { order ->
+                ReturnOrderCard(
+                    order = order,
+                    isInTransit = true,
+                    retailerInfo = retailerInfoMap[order.retailerId],
+                    onAction = { deliveryViewModel.markReturnDeliveredToRetailer(order.id) }
+                )
+            }
+        }
+        if (availableList.isNotEmpty()) {
+            item {
+                Text(
+                    "Awaiting Pickup (${availableList.size})",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = DPrimary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(availableList, key = { "avail_${it.id}" }) { order ->
+                ReturnOrderCard(
+                    order = order,
+                    isInTransit = false,
+                    retailerInfo = retailerInfoMap[order.retailerId],
+                    onAction = { deliveryViewModel.acceptReturnPickup(order.id) }
+                )
+            }
+        }
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun ReturnOrderCard(
+    order: Order,
+    isInTransit: Boolean,
+    retailerInfo: RetailerStoreInfo?,
+    onAction: () -> Unit
+) {
+    val fmt = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val accentColor = if (isInTransit) DInfo else DPrimary
+    val addr = order.shippingAddress
+
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.size(40.dp).background(accentColor.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (isInTransit) Icons.Default.TwoWheeler else Icons.Default.AssignmentReturn,
+                        null, tint = accentColor, modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(order.orderNumber, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(fmt.format(Date(order.createdAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(color = accentColor.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
+                    Text(
+                        if (isInTransit) "IN TRANSIT" else "PICKUP",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = accentColor
+                    )
+                }
+            }
+
+            // Items
+            order.items.take(2).forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    coil.compose.AsyncImage(
+                        model = item.productImage,
+                        contentDescription = null,
+                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(item.productName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("Qty: ${item.quantity}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            // Customer address (pick up from / already picked up from)
+            if (addr != null) {
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.LocationOn, null, tint = accentColor, modifier = Modifier.size(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            if (isInTransit) "Picked up from" else "Pick up from",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = accentColor
+                        )
+                        if (addr.fullName.isNotBlank())
+                            Text(addr.fullName, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+                        if (addr.phone.isNotBlank())
+                            Text(addr.phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            buildString {
+                                append(addr.addressLine1)
+                                if (addr.addressLine2.isNotBlank()) append(", ${addr.addressLine2}")
+                                append(", ${addr.city}")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Retailer address — where to deliver the returned product
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+            Surface(
+                shape  = RoundedCornerShape(10.dp),
+                color  = DSuccess.copy(alpha = 0.07f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, DSuccess.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Store, null, tint = DSuccess, modifier = Modifier.size(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            "Deliver return to retailer",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = DSuccess
+                        )
+                        if (retailerInfo != null) {
+                            if (retailerInfo.storeName.isNotBlank())
+                                Text(retailerInfo.storeName, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+                            if (retailerInfo.contactPhone.isNotBlank())
+                                Text(retailerInfo.contactPhone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (retailerInfo.storeAddress.isNotBlank())
+                                Text(retailerInfo.storeAddress, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Text("Loading retailer details…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = onAction,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                Icon(
+                    if (isInTransit) Icons.Default.Store else Icons.Default.AssignmentReturn,
+                    null, modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (isInTransit) "Delivered to Retailer" else "Pick Up from Customer",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun HistoryTab(state: Resource<List<Order>>, onRefresh: () -> Unit) {
@@ -623,9 +915,8 @@ private fun ProfileTab(
 // ── Order Journey Timeline ───────────────────────────────────────────────────
 
 private val journeySteps = listOf(
-    OrderStatus.CONFIRMED         to "Confirmed",
-    OrderStatus.PACKED            to "Packed",
     OrderStatus.READY_FOR_PICKUP  to "Ready",
+    OrderStatus.SHIPPED           to "Picked Up",
     OrderStatus.OUT_FOR_DELIVERY  to "En Route",
     OrderStatus.DELIVERED         to "Delivered"
 )
@@ -708,15 +999,64 @@ private fun AddressBlock(address: Address?) {
 
 @Composable
 private fun PaymentRow(order: Order) {
-    val isCod = order.paymentMethod == PaymentMethod.CASH_ON_DELIVERY
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(if (isCod) Icons.Default.Money else Icons.Default.CreditCard, null, tint = if (isCod) DWarning else DInfo, modifier = Modifier.size(18.dp))
-        Text(
-            if (isCod) "COLLECT CASH: PKR ${order.total.toInt()}" else "Prepaid · PKR ${order.total.toInt()}",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (isCod) DWarning else DInfo
-        )
+    val isCod  = order.paymentMethod == PaymentMethod.CASH_ON_DELIVERY
+    val isPaid = order.paymentStatus == PaymentStatus.COMPLETED
+
+    if (isCod) {
+        // ── COD: red warning banner ─────────────────────────────────────────
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color    = DWarning.copy(alpha = 0.12f),
+            shape    = RoundedCornerShape(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.Money, null, tint = DWarning, modifier = Modifier.size(20.dp))
+                Column {
+                    Text(
+                        "COLLECT CASH ON DELIVERY",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = DWarning
+                    )
+                    Text(
+                        "PKR ${order.total.toInt()} to collect from customer",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DWarning.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+    } else {
+        // ── Safepay / prepaid: green paid badge ─────────────────────────────
+        val color = if (isPaid) DSuccess else DInfo
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color    = color.copy(alpha = 0.1f),
+            shape    = RoundedCornerShape(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.Lock, null, tint = color, modifier = Modifier.size(20.dp))
+                Column {
+                    Text(
+                        if (isPaid) "PREPAID — NO CASH NEEDED" else "SAFEPAY (Awaiting Confirmation)",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = color
+                    )
+                    Text(
+                        "PKR ${order.total.toInt()} — paid via Safepay",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = color.copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -753,33 +1093,190 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
     }
 }
 
-// ── Create profile dialog ─────────────────────────────────────────────────────
+// ── Awaiting Approval Screen ──────────────────────────────────────────────────
 
 @Composable
-private fun CreateProfileDialog(onConfirm: (String, String, String, String) -> Unit, onDismiss: () -> Unit) {
-    var companyName   by remember { mutableStateOf("") }
-    var contactPerson by remember { mutableStateOf("") }
-    var phone         by remember { mutableStateOf("") }
-    var address       by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Create Courier Profile", fontWeight = FontWeight.Bold) },
-        text  = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(companyName,   { companyName = it },   label = { Text("Courier Company Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(contactPerson, { contactPerson = it }, label = { Text("Contact Person Name") },  modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(phone,         { phone = it },         label = { Text("Contact Phone") },         modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(address,       { address = it },       label = { Text("Head Office Address") },   modifier = Modifier.fillMaxWidth(), minLines = 2)
+private fun AwaitingApprovalScreen(profile: DeliveryPartner, onLogout: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Box(
+                Modifier
+                    .size(96.dp)
+                    .background(DWarning.copy(alpha = 0.12f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.HourglassEmpty,
+                    contentDescription = null,
+                    tint = DWarning,
+                    modifier = Modifier.size(52.dp)
+                )
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(companyName, contactPerson, address, phone) },
-                enabled = companyName.isNotBlank() && contactPerson.isNotBlank() && phone.isNotBlank()
-            ) { Text("Save Profile") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
+
+            Text(
+                "Awaiting Admin Approval",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Text(
+                "Your delivery partner account for \"${profile.companyName}\" has been submitted and is pending review by the platform admin.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Surface(
+                color = DWarning.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Info, null, tint = DWarning, modifier = Modifier.size(18.dp))
+                        Text("What happens next?", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = DWarning)
+                    }
+                    Text("• Admin will review your application", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("• Only one delivery partner is active platform-wide", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("• Once approved, you can start accepting deliveries", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.Logout, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Logout", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// ── Create profile dialog ─────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreateProfileDialog(onConfirm: (String, String, String, String, List<Uri>) -> Unit, onDismiss: () -> Unit) {
+    var companyName    by remember { mutableStateOf("") }
+    var contactPerson  by remember { mutableStateOf("") }
+    var phone          by remember { mutableStateOf("") }
+    var address        by remember { mutableStateOf("") }
+    var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris -> selectedImages = (selectedImages + uris).distinct() }
+
+    val canSubmit = companyName.isNotBlank() && contactPerson.isNotBlank() && phone.isNotBlank()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Create Courier Profile", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = { if (canSubmit) onConfirm(companyName, contactPerson, address, phone, selectedImages) },
+                            enabled = canSubmit
+                        ) { Text("Save", fontWeight = FontWeight.Bold) }
+                    }
+                )
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    OutlinedTextField(companyName, { companyName = it }, label = { Text("Courier Company Name *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                }
+                item {
+                    OutlinedTextField(contactPerson, { contactPerson = it }, label = { Text("Contact Person Name *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                }
+                item {
+                    OutlinedTextField(phone, { phone = it }, label = { Text("Contact Phone *") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                }
+                item {
+                    OutlinedTextField(address, { address = it }, label = { Text("Head Office Address") }, modifier = Modifier.fillMaxWidth(), minLines = 2, shape = RoundedCornerShape(10.dp))
+                }
+                item {
+                    Divider()
+                    Spacer(Modifier.height(4.dp))
+                    Text("Verification Documents", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Upload company registration, driver's license, or vehicle documents for admin verification.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (selectedImages.isNotEmpty()) {
+                    item {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(selectedImages) { uri ->
+                                Box {
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(90.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    IconButton(
+                                        onClick = { selectedImages = selectedImages.filter { it != uri } },
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(24.dp)
+                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                    ) {
+                                        Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item {
+                    OutlinedButton(
+                        onClick = { imagePicker.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.AddAPhoto, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (selectedImages.isEmpty()) "Upload Documents / Photos" else "Add More Images")
+                    }
+                }
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+        }
+    }
 }
 

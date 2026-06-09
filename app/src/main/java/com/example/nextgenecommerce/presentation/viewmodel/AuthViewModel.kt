@@ -1,13 +1,17 @@
 package com.example.nextgenecommerce.presentation.viewmodel
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.nextgenecommerce.data.models.User
 import com.example.nextgenecommerce.data.repository.AuthRepository
+import com.example.nextgenecommerce.data.repository.PushNotificationRepository
 import com.example.nextgenecommerce.data.repository.StorageRepository
 import com.example.nextgenecommerce.util.Resource
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +21,9 @@ import javax.inject.Inject
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
+    private val pushNotificationRepository: PushNotificationRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<Resource<User>?>(null)
@@ -75,7 +81,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.register(email, password, name, role).collect {
                 _authState.value = it
-                if (it is Resource.Success) authRepository.updateSharedUser(it.data)
+                if (it is Resource.Success) {
+                    authRepository.updateSharedUser(it.data)
+                    uploadFcmToken(it.data)
+                }
             }
         }
     }
@@ -84,7 +93,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.login(email, password).collect {
                 _authState.value = it
-                if (it is Resource.Success) authRepository.updateSharedUser(it.data)
+                if (it is Resource.Success) {
+                    authRepository.updateSharedUser(it.data)
+                    uploadFcmToken(it.data)
+                }
             }
         }
     }
@@ -93,7 +105,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.loginWithGoogle(idToken, allowCreation = false).collect {
                 _authState.value = it
-                if (it is Resource.Success) authRepository.updateSharedUser(it.data)
+                if (it is Resource.Success) {
+                    authRepository.updateSharedUser(it.data)
+                    uploadFcmToken(it.data)
+                }
             }
         }
     }
@@ -102,7 +117,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.loginWithGoogle(idToken, allowCreation = true).collect {
                 _authState.value = it
-                if (it is Resource.Success) authRepository.updateSharedUser(it.data)
+                if (it is Resource.Success) {
+                    authRepository.updateSharedUser(it.data)
+                    uploadFcmToken(it.data)
+                }
             }
         }
     }
@@ -115,7 +133,29 @@ class AuthViewModel @Inject constructor(
                     if (!authRepository.isAdminVerifiedByLogin()) {
                         authRepository.setAdminVerified(it.data?.isAdmin() == true)
                     }
+                    // Refresh FCM token on every app start so it stays current
+                    uploadFcmToken(it.data)
                 }
+            }
+        }
+    }
+
+    // Fetches the current FCM token from Firebase and saves it to Supabase so the server
+    // knows which device to target for push notifications.
+    private fun uploadFcmToken(user: User?) {
+        user ?: return
+        val role = when {
+            user.isAdmin() -> "admin"
+            user.isRetailer() -> "retailer"
+            user.isDeliveryPartner() -> "delivery_partner"
+            else -> "customer"
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            // Keep SharedPreferences in sync for NextGenFirebaseMessagingService
+            context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+                .edit().putString("fcm_token", token).apply()
+            viewModelScope.launch {
+                pushNotificationRepository.saveFcmToken(user.id, token, role)
             }
         }
     }
@@ -138,6 +178,27 @@ class AuthViewModel @Inject constructor(
             _authState.value = null
             _adminLoginState.value = null
         }
+    }
+
+    private val _deleteAccountState = MutableStateFlow<Resource<Boolean>?>(null)
+    val deleteAccountState: StateFlow<Resource<Boolean>?> = _deleteAccountState.asStateFlow()
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            authRepository.deleteAccount().collect { result ->
+                _deleteAccountState.value = result
+                if (result is Resource.Success) {
+                    authRepository.updateSharedUser(null)
+                    authRepository.setAdminVerified(false)
+                    _authState.value = null
+                    _adminLoginState.value = null
+                }
+            }
+        }
+    }
+
+    fun resetDeleteAccountState() {
+        _deleteAccountState.value = null
     }
 
     fun isUserLoggedIn(): Boolean = authRepository.isUserLoggedIn()

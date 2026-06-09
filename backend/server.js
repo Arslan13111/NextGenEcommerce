@@ -2,7 +2,6 @@
 // Uses Hugging Face Spaces Gradio API (yisol/IDM-VTON)
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
@@ -15,8 +14,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -26,17 +25,262 @@ app.get('/auth/confirm', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'email-confirmed.html'));
 });
 
+app.get('/account/delete', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'account-deletion.html'));
+});
+
+app.get('/privacy-policy', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy-policy.html'));
+});
+
+app.get('/terms', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'terms.html'));
+});
+
 // Hugging Face Spaces configuration
 const HF_SPACE_URL = 'https://yisol-idm-vton.hf.space';
 
 // Supabase Configuration
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 // RapidAPI Configuration
 const rapidApiKey = process.env.RAPID_API_KEY;
 const rapidApiHost = 'try-on-diffusion.p.rapidapi.com';
+const ADMIN_ROLE = 'admin';
+const VALID_ORDER_STATUSES = new Set([
+    'PENDING',
+    'CONFIRMED',
+    'PROCESSING',
+    'PACKED',
+    'READY_FOR_PICKUP',
+    'SHIPPED',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
+    'CANCELLED',
+    'RETURN_REQUESTED',
+    'RETURN_APPROVED',
+    'RETURN_IN_TRANSIT',
+    'RETURN_RECEIVED',
+    'RETURNED',
+    'RETURN_REJECTED'
+]);
+
+function getBearerToken(req) {
+    const header = req.headers.authorization || '';
+    const [scheme, token] = header.split(' ');
+    return scheme?.toLowerCase() === 'bearer' ? token : null;
+}
+
+async function requireAuth(req, res, next) {
+    if (!supabase) {
+        return res.status(503).json({ success: false, message: 'Database is not configured' });
+    }
+
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Missing bearer token' });
+    }
+
+    try {
+        const { data, error } = await supabase.auth.getUser(token);
+        if (error || !data?.user) {
+            return res.status(401).json({ success: false, message: 'Invalid bearer token' });
+        }
+        req.auth = { user: data.user, token };
+        next();
+    } catch (error) {
+        return res.status(401).json({ success: false, message: 'Invalid bearer token' });
+    }
+}
+
+async function getUserRole(userId) {
+    const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+    if (error) return null;
+    return data?.role || null;
+}
+
+async function isAdminUser(userId) {
+    return (await getUserRole(userId)) === ADMIN_ROLE;
+}
+
+async function requireAdmin(req, res, next) {
+    if (!(await isAdminUser(req.auth.user.id))) {
+        return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    next();
+}
+
+async function requireSameUserOrAdmin(req, res, next) {
+    if (req.params.userId === req.auth.user.id || await isAdminUser(req.auth.user.id)) {
+        return next();
+    }
+    return res.status(403).json({ success: false, message: 'Access denied' });
+}
+
+async function loadPricedOrderItems(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('Order must contain at least one item');
+    }
+
+    const requestedItems = items.map(item => ({
+        ...item,
+        productId: item.productId || item.product_id,
+        quantity: Math.max(1, Math.min(99, Number.parseInt(item.quantity, 10) || 1))
+    }));
+
+    const productIds = [...new Set(requestedItems.map(item => item.productId).filter(Boolean))];
+    if (productIds.length !== requestedItems.length) {
+        throw new Error('Every order item must include a productId');
+    }
+
+    const { data: products, error } = await supabase
+        .from('products')
+        .select('id,name,price,image_url,stock,retailer_id')
+        .in('id', productIds);
+
+    if (error) throw error;
+
+    const productsById = new Map((products || []).map(product => [String(product.id), product]));
+    return requestedItems.map(item => {
+        const product = productsById.get(String(item.productId));
+        if (!product) {
+            throw new Error(`Product not found: ${item.productId}`);
+        }
+
+        const stock = Number(product.stock ?? 0);
+        if (stock > 0 && item.quantity > stock) {
+            throw new Error(`Insufficient stock for ${product.name}`);
+        }
+
+        return {
+            ...item,
+            productId: String(product.id),
+            productName: product.name,
+            productImage: product.image_url || item.productImage || '',
+            price: Number(product.price),
+            retailerId: product.retailer_id || item.retailerId || null
+        };
+    });
+}
+
+async function assertAddressBelongsToUser(addressId, userId) {
+    if (!addressId) return;
+
+    const { data, error } = await supabase
+        .from('shipping_addresses')
+        .select('id,user_id')
+        .eq('id', addressId)
+        .single();
+
+    if (error || !data) {
+        throw new Error('Shipping address not found');
+    }
+
+    if (data.user_id !== userId) {
+        const err = new Error('Shipping address does not belong to the current user');
+        err.statusCode = 403;
+        throw err;
+    }
+}
+
+function getSafepayConfig() {
+    const environment = process.env.SAFEPAY_ENV || 'sandbox';
+    const apiKey = process.env.SAFEPAY_PUBLIC_KEY;
+    const v1Secret = process.env.SAFEPAY_SECRET_KEY;
+    const webhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET;
+
+    if (!apiKey || !v1Secret || !webhookSecret) {
+        throw new Error('Safepay server credentials are not fully configured');
+    }
+
+    return {
+        environment,
+        apiKey,
+        v1Secret,
+        webhookSecret
+    };
+}
+
+function safepayApiBase(environment) {
+    if (environment === 'production') return 'https://api.getsafepay.com';
+    if (environment === 'development') return 'https://dev.api.getsafepay.com';
+    return 'https://sandbox.api.getsafepay.com';
+}
+
+function safepayCheckoutBase(environment) {
+    if (environment === 'production') return 'https://getsafepay.com/checkout/pay';
+    if (environment === 'development') return 'https://dev.api.getsafepay.com/checkout/pay';
+    return 'https://sandbox.api.getsafepay.com/checkout/pay';
+}
+
+async function createSafepayPayment(amount, currency) {
+    const config = getSafepayConfig();
+    const response = await axios.post(`${safepayApiBase(config.environment)}/order/v1/init`, {
+        amount,
+        client: config.apiKey,
+        currency,
+        environment: config.environment
+    });
+
+    return response.data?.data;
+}
+
+function createSafepayCheckoutUrl({ token, orderId }) {
+    const config = getSafepayConfig();
+    const params = new URLSearchParams({
+        beacon: token,
+        cancel_url: process.env.SAFEPAY_CANCEL_URL || 'nextgenecommerce://payment/cancel',
+        env: config.environment,
+        order_id: orderId,
+        redirect_url: process.env.SAFEPAY_REDIRECT_URL || 'nextgenecommerce://payment/success',
+        source: 'custom',
+        webhooks: 'true'
+    });
+
+    return `${safepayCheckoutBase(config.environment)}?${params.toString()}`;
+}
+
+function verifySafepayWebhook(req) {
+    const { webhookSecret } = getSafepayConfig();
+    const signature = req.headers['x-sfpy-signature'];
+    if (!signature || !req.body?.data) return false;
+
+    const expected = crypto
+        .createHmac('sha512', webhookSecret)
+        .update(Buffer.from(JSON.stringify(req.body.data)))
+        .digest('hex');
+
+    const signatureBuffer = Buffer.from(String(signature), 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+
+    return signatureBuffer.length === expectedBuffer.length
+        && crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+}
+
+function extractSafepayOrderId(event) {
+    const data = event?.data || {};
+    return data.order_id
+        || data.orderId
+        || data.reference
+        || data.metadata?.order_id
+        || data.tracker?.order_id
+        || data.tracker?.metadata?.order_id
+        || null;
+}
+
+function extractSafepayTracker(event) {
+    const data = event?.data || {};
+    const tracker = data.tracker || data.payment?.tracker;
+    if (typeof tracker === 'string') return tracker;
+    return tracker?.token || data.token || data.beacon || null;
+}
 
 /**
  * Extract clean base64 data from data URL
@@ -784,7 +1028,7 @@ app.get('/products', (req, res) => {
             name: 'Pink Puffer',
             description: 'Vibrant pink puffer jacket for ladies.',
             price: 89.99,
-            originalPrice = 119.99,
+            originalPrice: 119.99,
             category: 'CLOTHING',
             subCategory: 'Jackets',
             images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400'],
@@ -802,7 +1046,7 @@ app.get('/products', (req, res) => {
             name: 'Red Puffer Design',
             description: 'Modern red puffer jacket design.',
             price: 99.99,
-            originalPrice = 139.99,
+            originalPrice: 139.99,
             category: 'CLOTHING',
             subCategory: 'Jackets',
             images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400'],
@@ -820,7 +1064,7 @@ app.get('/products', (req, res) => {
             name: 'Red Puffer Classic',
             description: 'Classic red puffer jacket.',
             price: 89.99,
-            originalPrice = 119.99,
+            originalPrice: 119.99,
             category: 'CLOTHING',
             subCategory: 'Jackets',
             images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400'],
@@ -837,8 +1081,8 @@ app.get('/products', (req, res) => {
             id: '18',
             name: 'Brown Leather Jacket',
             description: 'Stylish brown leather jacket with white collar.',
-            price = 159.99,
-            originalPrice = 219.99,
+            price: 159.99,
+            originalPrice: 219.99,
             category: 'CLOTHING',
             subCategory: 'Jackets',
             images: ['https://images.unsplash.com/photo-1520975954732-35dd22299614?w=400'],
@@ -855,8 +1099,8 @@ app.get('/products', (req, res) => {
             id: '19',
             name: 'White Puffer',
             description: 'Clean white puffer jacket.',
-            price = 99.99,
-            originalPrice = 129.99,
+            price: 99.99,
+            originalPrice: 129.99,
             category: 'CLOTHING',
             subCategory: 'Jackets',
             images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400'],
@@ -917,16 +1161,27 @@ app.get('/products/featured', (req, res) => {
 /**
  * Orders API Endpoints
  */
-app.post('/orders', async (req, res) => {
+app.post('/orders', requireAuth, async (req, res) => {
     try {
-        const { userId, items, shippingAddress, paymentMethod } = req.body;
+        const { items, shippingAddress, paymentMethod } = req.body;
+        const userId = req.auth.user.id;
 
-        if (!userId || !items || !shippingAddress || !paymentMethod) {
+        if (!items || !shippingAddress || !paymentMethod) {
             return res.status(400).json({ success: false, message: 'Missing required fields' });
         }
 
+        await assertAddressBelongsToUser(shippingAddress.id, userId);
+        const pricedItems = await loadPricedOrderItems(items);
+        const retailerIds = [...new Set(pricedItems.map(item => item.retailerId).filter(Boolean))];
+        if (retailerIds.length > 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Checkout currently supports one retailer per order on the backend'
+            });
+        }
+        const retailerId = retailerIds[0] || null;
         const orderNumber = 'ORD-' + Date.now();
-        const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const subtotal = pricedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const tax = subtotal * 0.08;
         const shipping = subtotal > 5000 ? 0 : 200; // Free shipping over Rs. 5000
         const total = subtotal + tax + shipping;
@@ -936,7 +1191,7 @@ app.post('/orders', async (req, res) => {
             id: crypto.randomUUID(),
             userId,
             orderNumber,
-            items,
+            items: pricedItems,
             subtotal: Math.round(subtotal),
             tax: Math.round(tax),
             shipping,
@@ -946,6 +1201,7 @@ app.post('/orders', async (req, res) => {
             paymentStatus: paymentMethod === 'CASH_ON_DELIVERY' ? 'PENDING' : 'PENDING',
             paymentMethod,
             shippingAddress,
+            retailerId,
             createdAt: now,
             updatedAt: now
         };
@@ -968,6 +1224,7 @@ app.post('/orders', async (req, res) => {
                         payment_status: 'PENDING',
                         payment_method: paymentMethod,
                         shipping_address_id: shippingAddress.id || null,
+                        retailer_id: retailerId,
                         created_at: new Date(now).toISOString(),
                         updated_at: new Date(now).toISOString()
                     })
@@ -975,10 +1232,10 @@ app.post('/orders', async (req, res) => {
                     .single();
 
                 if (orderError) {
-                    console.error('Supabase order insert error:', orderError.message);
+                    throw orderError;
                 } else {
                     // Insert order items
-                    const orderItems = items.map(item => ({
+                    const orderItems = pricedItems.map(item => ({
                         order_id: newOrder.id,
                         product_id: item.productId || '',
                         product_name: item.productName || '',
@@ -994,11 +1251,11 @@ app.post('/orders', async (req, res) => {
                         .insert(orderItems);
 
                     if (itemsError) {
-                        console.error('Supabase order_items insert error:', itemsError.message);
+                        throw itemsError;
                     }
 
                     // Create payment transaction record
-                    await supabase.from('payment_transactions').insert({
+                    const { error: paymentError } = await supabase.from('payment_transactions').insert({
                         order_id: newOrder.id,
                         payment_method: paymentMethod,
                         transaction_id: 'TXN-' + Date.now(),
@@ -1008,22 +1265,65 @@ app.post('/orders', async (req, res) => {
                         otp_verified: false,
                         created_at: new Date(now).toISOString()
                     });
+                    if (paymentError) throw paymentError;
+
+                    if (paymentMethod === 'VAULT') {
+                        const { error: vaultError } = await supabase.rpc('debit_wallet_for_order', {
+                            p_user_id: userId,
+                            p_amount: newOrder.total,
+                            p_description: `Order payment ${orderNumber}`
+                        });
+
+                        if (vaultError) {
+                            await supabase
+                                .from('payment_transactions')
+                                .update({ status: 'FAILED' })
+                                .eq('order_id', newOrder.id);
+                            await supabase
+                                .from('orders')
+                                .update({
+                                    status: 'CANCELLED',
+                                    payment_status: 'FAILED',
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', newOrder.id);
+                            throw vaultError;
+                        }
+
+                        await supabase
+                            .from('payment_transactions')
+                            .update({
+                                status: 'COMPLETED',
+                                completed_at: new Date().toISOString()
+                            })
+                            .eq('order_id', newOrder.id);
+                        await supabase
+                            .from('orders')
+                            .update({
+                                payment_status: 'COMPLETED',
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', newOrder.id);
+
+                        newOrder.paymentStatus = 'COMPLETED';
+                    }
 
                     console.log('✅ Order saved to Supabase:', newOrder.id);
                 }
             } catch (dbErr) {
-                console.error('DB error (falling back to response-only):', dbErr.message);
+                console.error('DB error:', dbErr.message);
+                return res.status(500).json({ success: false, message: 'Failed to save order' });
             }
         }
 
         res.json({ success: true, order: newOrder });
     } catch (error) {
         console.error('Create order error:', error.message);
-        res.status(500).json({ success: false, message: 'Failed to create order', error: error.message });
+        res.status(error.statusCode || 500).json({ success: false, message: 'Failed to create order', error: error.message });
     }
 });
 
-app.get('/orders/user/:userId', async (req, res) => {
+app.get('/orders/user/:userId', requireAuth, requireSameUserOrAdmin, async (req, res) => {
     const { userId } = req.params;
     try {
         if (supabase) {
@@ -1059,6 +1359,8 @@ app.get('/orders/user/:userId', async (req, res) => {
                 status: row.status,
                 paymentStatus: row.payment_status,
                 paymentMethod: row.payment_method,
+                retailerId: row.retailer_id,
+                parentOrderId: row.parent_order_id,
                 createdAt: new Date(row.created_at).getTime(),
                 updatedAt: new Date(row.updated_at).getTime()
             }));
@@ -1072,7 +1374,7 @@ app.get('/orders/user/:userId', async (req, res) => {
     }
 });
 
-app.get('/orders/:id', async (req, res) => {
+app.get('/orders/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     try {
         if (supabase) {
@@ -1083,6 +1385,9 @@ app.get('/orders/:id', async (req, res) => {
                 .single();
 
             if (error) throw error;
+            if (data.user_id !== req.auth.user.id && !(await isAdminUser(req.auth.user.id))) {
+                return res.status(403).json({ success: false, message: 'Access denied' });
+            }
 
             const order = {
                 id: data.id,
@@ -1105,6 +1410,8 @@ app.get('/orders/:id', async (req, res) => {
                 status: data.status,
                 paymentStatus: data.payment_status,
                 paymentMethod: data.payment_method,
+                retailerId: data.retailer_id,
+                parentOrderId: data.parent_order_id,
                 createdAt: new Date(data.created_at).getTime(),
                 updatedAt: new Date(data.updated_at).getTime()
             };
@@ -1118,10 +1425,13 @@ app.get('/orders/:id', async (req, res) => {
     }
 });
 
-app.put('/orders/:id/status', async (req, res) => {
+app.put('/orders/:id/status', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
+        if (!VALID_ORDER_STATUSES.has(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid order status' });
+        }
         if (supabase) {
             const { error } = await supabase
                 .from('orders')
@@ -1138,12 +1448,41 @@ app.put('/orders/:id/status', async (req, res) => {
 /**
  * Payment Transaction Endpoints
  */
-app.post('/orders/:id/payment/verify', async (req, res) => {
+app.get('/orders/:id/payment/status', requireAuth, async (req, res) => {
+    try {
+        const { data: order, error } = await supabase
+            .from('orders')
+            .select('id,user_id,payment_status,payment_method')
+            .eq('id', req.params.id)
+            .single();
+
+        if (error || !order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        if (order.user_id !== req.auth.user.id && !(await isAdminUser(req.auth.user.id))) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
+        return res.json({
+            success: true,
+            paymentStatus: order.payment_status,
+            paymentMethod: order.payment_method
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Failed to fetch payment status' });
+    }
+});
+
+app.post('/orders/:id/payment/verify', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { mobileNumber, otpVerified } = req.body;
     try {
+        if (!otpVerified) {
+            return res.status(400).json({ success: false, message: 'otpVerified must be true' });
+        }
         if (supabase && otpVerified) {
-            await supabase
+            const { error: transactionError } = await supabase
                 .from('payment_transactions')
                 .update({
                     status: 'COMPLETED',
@@ -1152,11 +1491,13 @@ app.post('/orders/:id/payment/verify', async (req, res) => {
                     completed_at: new Date().toISOString()
                 })
                 .eq('order_id', id);
+            if (transactionError) throw transactionError;
 
-            await supabase
+            const { error: orderError } = await supabase
                 .from('orders')
                 .update({ payment_status: 'COMPLETED', updated_at: new Date().toISOString() })
                 .eq('id', id);
+            if (orderError) throw orderError;
         }
         res.json({ success: true, message: 'Payment verified' });
     } catch (error) {
@@ -1167,7 +1508,7 @@ app.post('/orders/:id/payment/verify', async (req, res) => {
 /**
  * Addresses API Endpoints
  */
-app.get('/addresses/:userId', async (req, res) => {
+app.get('/addresses/:userId', requireAuth, requireSameUserOrAdmin, async (req, res) => {
     const { userId } = req.params;
     try {
         if (supabase) {
@@ -1234,6 +1575,41 @@ app.post('/auth/login', (req, res) => {
     });
 });
 
+app.delete('/auth/account', requireAuth, async (req, res) => {
+    const userId = req.auth.user.id;
+
+    if (!supabase) {
+        return res.status(503).json({ success: false, message: 'Database is not configured' });
+    }
+
+    try {
+        await supabase.from('user_fcm_tokens').delete().eq('user_id', userId);
+        await supabase.from('shipping_addresses').delete().eq('user_id', userId);
+
+        const { error: profileError } = await supabase
+            .from('users')
+            .update({
+                email: `deleted-${userId}@deleted.local`,
+                name: 'Deleted user',
+                phone: '',
+                profile_image_url: null,
+                role: 'customer',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+
+        if (profileError) throw profileError;
+
+        const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+        if (authError) throw authError;
+
+        return res.json({ success: true, message: 'Account deleted' });
+    } catch (error) {
+        console.error('Delete account error:', error.message);
+        return res.status(500).json({ success: false, message: 'Failed to delete account' });
+    }
+});
+
 /**
  * Reviews API Endpoints
  */
@@ -1262,6 +1638,224 @@ app.get('/reviews/product/:productId', (req, res) => {
 });
 
 /**
+ * ════════════════════════════════════════════════════════════════════════════
+ * SAFEPAY PAYMENT ENDPOINTS
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * POST /api/safepay/session
+ * Creates a Safepay payment tracker server-side (keeps secret key off device).
+ * Body: { orderId: String, currency?: String }
+ */
+app.post('/api/safepay/session', requireAuth, async (req, res) => {
+    const { orderId, currency = 'PKR' } = req.body;
+
+    if (!orderId) {
+        return res.status(400).json({ success: false, message: 'orderId is required' });
+    }
+
+    try {
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select('id,user_id,total,payment_method,payment_status')
+            .eq('id', orderId)
+            .single();
+
+        if (orderError || !order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        if (order.user_id !== req.auth.user.id && !(await isAdminUser(req.auth.user.id))) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
+        if (order.payment_method !== 'SAFEPAY') {
+            return res.status(400).json({ success: false, message: 'Order is not configured for Safepay' });
+        }
+
+        if (order.payment_status === 'COMPLETED') {
+            return res.status(409).json({ success: false, message: 'Order is already paid' });
+        }
+
+        const payment = await createSafepayPayment(Number(order.total), currency);
+        const tracker = payment?.token;
+        if (!tracker) {
+            return res.status(502).json({ success: false, message: 'Safepay did not return a tracker token' });
+        }
+
+        const checkoutUrl = createSafepayCheckoutUrl({
+            token: tracker,
+            orderId
+        });
+
+        // Save tracker to payment_transactions if Supabase is configured
+        if (supabase) {
+            const { error: transactionError } = await supabase
+                .from('payment_transactions')
+                .upsert({
+                    order_id:        orderId,
+                    safepay_tracker: tracker,
+                    status:          'PENDING',
+                    gateway:         'SAFEPAY'
+                }, { onConflict: 'order_id' });
+            if (transactionError) throw transactionError;
+
+            // Also store tracker on the order row for quick lookup
+            const { error: updateOrderError } = await supabase
+                .from('orders')
+                .update({ safepay_tracker: tracker })
+                .eq('id', orderId);
+            if (updateOrderError) throw updateOrderError;
+        }
+
+        return res.json({ success: true, tracker, checkoutUrl });
+
+    } catch (err) {
+        console.error('[Safepay] Session creation error:', err?.response?.data || err.message);
+        return res.status(500).json({
+            success: false,
+            message: err?.response?.data?.status?.message || 'Failed to create Safepay session'
+        });
+    }
+});
+
+app.post('/api/safepay/webhook', async (req, res) => {
+    if (!supabase) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+
+    try {
+        if (!verifySafepayWebhook(req)) {
+            return res.status(400).json({ success: false, message: 'Invalid Safepay signature' });
+        }
+
+        const event = req.body;
+        const eventType = event?.type;
+        const tracker = extractSafepayTracker(event);
+        let orderId = extractSafepayOrderId(event);
+
+        if (!orderId && tracker) {
+            const { data: transactions, error: transactionLookupError } = await supabase
+                .from('payment_transactions')
+                .select('order_id')
+                .eq('safepay_tracker', tracker)
+                .limit(1);
+
+            if (transactionLookupError) throw transactionLookupError;
+            orderId = transactions?.[0]?.order_id || null;
+        }
+
+        if (!orderId) {
+            return res.status(422).json({ success: false, message: 'Webhook could not be matched to an order' });
+        }
+
+        const { data: order, error: orderLookupError } = await supabase
+            .from('orders')
+            .select('id,payment_method,safepay_tracker')
+            .eq('id', orderId)
+            .single();
+
+        if (orderLookupError || !order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        if (order.payment_method !== 'SAFEPAY') {
+            return res.status(400).json({ success: false, message: 'Order is not a Safepay order' });
+        }
+
+        if (tracker && order.safepay_tracker && tracker !== order.safepay_tracker) {
+            return res.status(400).json({ success: false, message: 'Safepay tracker mismatch' });
+        }
+
+        const now = new Date().toISOString();
+        if (eventType === 'payment.succeeded') {
+            const { error: orderUpdateError } = await supabase
+                .from('orders')
+                .update({ payment_status: 'COMPLETED', updated_at: now })
+                .eq('id', orderId);
+            if (orderUpdateError) throw orderUpdateError;
+
+            const { error: transactionUpdateError } = await supabase
+                .from('payment_transactions')
+                .update({
+                    status: 'COMPLETED',
+                    completed_at: now,
+                    ...(tracker ? { safepay_tracker: tracker } : {})
+                })
+                .eq('order_id', orderId);
+            if (transactionUpdateError) throw transactionUpdateError;
+        } else if (eventType === 'payment.failed') {
+            const { error: orderUpdateError } = await supabase
+                .from('orders')
+                .update({ payment_status: 'FAILED', updated_at: now })
+                .eq('id', orderId);
+            if (orderUpdateError) throw orderUpdateError;
+
+            const { error: transactionUpdateError } = await supabase
+                .from('payment_transactions')
+                .update({ status: 'FAILED' })
+                .eq('order_id', orderId);
+            if (transactionUpdateError) throw transactionUpdateError;
+        }
+
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('[SafepayWebhook] Error:', error.message);
+        return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+    }
+});
+
+/**
+ * PUT /orders/:id/payment/complete
+ * Called by the app after Safepay payment success deep-link.
+ * Marks payment_transactions as COMPLETED and order payment_status as COMPLETED.
+ * Body: { tracker?: String }
+ */
+app.put('/orders/:id/payment/complete', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { tracker } = req.body;
+
+    if (!supabase) {
+        return res.status(503).json({ success: false, message: 'Database not configured' });
+    }
+
+    try {
+        const now = new Date().toISOString();
+
+        // Update orders table
+        const { error: orderErr } = await supabase
+            .from('orders')
+            .update({
+                payment_status: 'COMPLETED',
+                updated_at:     now
+            })
+            .eq('id', id);
+
+        if (orderErr) throw orderErr;
+
+        // Update payment_transactions table
+        const txUpdate = {
+            status:       'COMPLETED',
+            completed_at: now
+        };
+        if (tracker) txUpdate.safepay_tracker = tracker;
+
+        const { error: transactionError } = await supabase
+            .from('payment_transactions')
+            .update(txUpdate)
+            .eq('order_id', id);
+        if (transactionError) throw transactionError;
+
+        return res.json({ success: true, message: 'Payment marked as completed' });
+
+    } catch (err) {
+        console.error('[PaymentComplete] Error:', err.message);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
  * Start server
  */
 app.listen(PORT, () => {
@@ -1274,6 +1868,8 @@ app.listen(PORT, () => {
     console.log(`🛍️  Products API: GET /products`);
     console.log(`📦 Orders API: POST /orders`);
     console.log(`👤 Auth API: POST /auth/login, /auth/register`);
+    console.log(`💳 Safepay Session: POST /api/safepay/session`);
+    console.log(`✅ Payment Complete: PUT /orders/:id/payment/complete`);
     console.log(`💚 Health Check: GET /health`);
     console.log('='.repeat(60));
     console.log('📝 Ready to receive requests!');

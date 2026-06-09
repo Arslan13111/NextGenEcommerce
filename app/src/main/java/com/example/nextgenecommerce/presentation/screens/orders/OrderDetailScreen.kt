@@ -447,21 +447,67 @@ fun OrderDetailScreen(
                     }
                 }
 
-                // Return reason banner (if return was requested or accepted)
-                if (o.status == OrderStatus.RETURN_REQUESTED) {
+                // Return status banners
+                val returnStatuses = setOf(
+                    OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+                    OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED,
+                    OrderStatus.RETURNED, OrderStatus.RETURN_REJECTED
+                )
+                if (o.status in returnStatuses) {
                     item {
+                        val (bannerColor, bannerIcon, bannerTitle, bannerBody) = when (o.status) {
+                            OrderStatus.RETURN_REQUESTED -> arrayOf(
+                                Color(0xFF7B1FA2), Icons.Default.AssignmentReturn,
+                                "Awaiting Retailer Review",
+                                "Your return request has been submitted and is pending review by the retailer."
+                            )
+                            OrderStatus.RETURN_APPROVED -> arrayOf(
+                                Color(0xFF2E7D32), Icons.Default.CheckCircle,
+                                "Return Approved – Awaiting Pickup",
+                                "The retailer has approved your return. A delivery partner will contact you shortly to collect the item."
+                            )
+                            OrderStatus.RETURN_IN_TRANSIT -> arrayOf(
+                                Color(0xFF1565C0), Icons.Default.LocalShipping,
+                                "Return In Transit",
+                                "The delivery partner has picked up your item and is returning it to the retailer."
+                            )
+                            OrderStatus.RETURN_RECEIVED -> arrayOf(
+                                Color(0xFF00838F), Icons.Default.Inbox,
+                                "Item Received by Retailer",
+                                "The retailer has received your returned item and is inspecting it. Your refund will be processed shortly."
+                            )
+                            OrderStatus.RETURN_REJECTED -> arrayOf(
+                                Color(0xFFD32F2F), Icons.Default.Cancel,
+                                "Return Rejected",
+                                o.adminReturnNote ?: "Your return request has been rejected by the retailer. Please contact support for more details."
+                            )
+                            else -> arrayOf( // RETURNED
+                                Color(0xFF388E3C), Icons.Default.CheckCircle,
+                                "Return Complete – Refund Processed",
+                                o.adminReturnNote ?: "Your returned item has been verified. Your refund has been processed successfully."
+                            )
+                        }
+                        @Suppress("UNCHECKED_CAST")
+                        val color = bannerColor as Color
+                        @Suppress("UNCHECKED_CAST")
+                        val icon  = bannerIcon as androidx.compose.ui.graphics.vector.ImageVector
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF7B1FA2).copy(alpha = 0.08f)),
+                            colors   = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.08f)),
                             elevation = CardDefaults.cardElevation(0.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Default.AssignmentReturn, null, tint = Color(0xFF7B1FA2), modifier = Modifier.size(18.dp))
-                                    Text("Under Review", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFF7B1FA2))
+                                    Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+                                    Text(bannerTitle as String, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = color)
                                 }
-                                Text(o.returnReason ?: "Return request submitted and is pending review.", style = MaterialTheme.typography.bodyMedium)
-                                
+                                Text(bannerBody as String, style = MaterialTheme.typography.bodyMedium)
+
+                                // Show return images + reason for all return states
+                                if (o.returnReason?.isNotBlank() == true) {
+                                    Text("Reason: ${o.returnReason}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                                 if (o.returnImages.isNotEmpty()) {
                                     LazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -477,59 +523,12 @@ fun OrderDetailScreen(
                                         }
                                     }
                                 }
-                                
-                                Text("Your return request is being reviewed by our team. Once we inspect the product, we will notify you about the refund.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
 
-                // Admin return rejection banner
-                if (o.status == OrderStatus.RETURN_REJECTED) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)),
-                            elevation = CardDefaults.cardElevation(0.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Default.Cancel, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                    Text("Return Rejected", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.error)
-                                }
-                                Text(
-                                    o.adminReturnNote ?: "Your return request has been rejected. Please contact support for more details.",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text("If you believe this was an error, please reach out to our customer service.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-
-                // Admin return note banner (return accepted by admin)
-                if (o.status == OrderStatus.RETURNED) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF388E3C).copy(alpha = 0.08f)),
-                            elevation = CardDefaults.cardElevation(0.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF388E3C), modifier = Modifier.size(18.dp))
-                                    Text("Return Accepted", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFF388E3C))
-                                }
-                                Text(
-                                    o.adminReturnNote ?: "Your return has been accepted. After review of the product, your payment will be refunded.",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (o.paymentStatus == PaymentStatus.REFUNDED) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF388E3C).copy(alpha = 0.15f)) {
+                                if (o.status == OrderStatus.RETURNED && o.paymentStatus == PaymentStatus.REFUNDED) {
+                                    Surface(shape = RoundedCornerShape(8.dp), color = color.copy(alpha = 0.15f)) {
                                         Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Payments, null, tint = Color(0xFF388E3C), modifier = Modifier.size(16.dp))
-                                            Text("Refund processed successfully", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFF388E3C))
+                                            Icon(Icons.Default.Payments, null, tint = color, modifier = Modifier.size(16.dp))
+                                            Text("Refund processed successfully", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = color)
                                         }
                                     }
                                 }
@@ -617,7 +616,12 @@ private fun OrderTrackingTimeline(status: OrderStatus) {
         else -> 0
     }
 
-    if (status == OrderStatus.CANCELLED || status == OrderStatus.RETURN_REJECTED) return
+    val nonTrackable = setOf(
+        OrderStatus.CANCELLED, OrderStatus.RETURN_REJECTED,
+        OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+        OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED, OrderStatus.RETURNED
+    )
+    if (status in nonTrackable) return
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -803,9 +807,12 @@ private fun OrderStatusBadge(status: OrderStatus) {
         OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary to "Out for Delivery"
         OrderStatus.DELIVERED -> Color(0xFF4CAF50) to "Delivered"
         OrderStatus.CANCELLED -> MaterialTheme.colorScheme.error to "Cancelled"
-        OrderStatus.RETURN_REQUESTED -> Color(0xFF6A1B9A) to "Return Requested"
-        OrderStatus.RETURNED -> Color(0xFF6D4C41) to "Returned"
-        OrderStatus.RETURN_REJECTED -> MaterialTheme.colorScheme.error to "Return Rejected"
+        OrderStatus.RETURN_REQUESTED  -> Color(0xFF6A1B9A) to "Return Requested"
+        OrderStatus.RETURN_APPROVED   -> Color(0xFF2E7D32) to "Return Approved"
+        OrderStatus.RETURN_IN_TRANSIT -> Color(0xFF1565C0) to "Return In Transit"
+        OrderStatus.RETURN_RECEIVED   -> Color(0xFF00838F) to "Return Received"
+        OrderStatus.RETURNED          -> Color(0xFF6D4C41) to "Returned & Refunded"
+        OrderStatus.RETURN_REJECTED   -> MaterialTheme.colorScheme.error to "Return Rejected"
     }
     Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = 0.1f)) {
         Text(
@@ -840,6 +847,7 @@ private fun formatPaymentMethod(method: PaymentMethod): String = when (method) {
     PaymentMethod.JAZZCASH -> "JazzCash"
     PaymentMethod.SAFEPAY -> "Safepay"
     PaymentMethod.CASH_ON_DELIVERY -> "Cash on Delivery"
+    PaymentMethod.VAULT -> "My Vault"
 }
 
 private fun formatDate(timestamp: Long): String {

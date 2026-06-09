@@ -1,5 +1,6 @@
 package com.example.nextgenecommerce.di
 
+import com.example.nextgenecommerce.BuildConfig
 import android.content.Context
 import com.example.nextgenecommerce.api.SafepayApiService
 import com.example.nextgenecommerce.api.SafepayClient
@@ -86,7 +87,11 @@ object AppModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.ENABLE_HTTP_LOGGING) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
 
         return OkHttpClient.Builder()
@@ -101,7 +106,7 @@ object AppModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:3000/") // Android emulator localhost
+            .baseUrl(BuildConfig.BACKEND_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

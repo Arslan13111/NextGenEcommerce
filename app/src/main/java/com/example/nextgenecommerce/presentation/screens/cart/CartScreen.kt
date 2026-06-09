@@ -81,9 +81,11 @@ fun CartScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (cartItems.isNotEmpty()) {
+                        if (selectedItemIds.isNotEmpty()) {
                             IconButton(
-                                onClick = { viewModel.clearCart() },
+                                onClick = {
+                                    selectedItems.forEach { item -> viewModel.removeFromCart(item) }
+                                },
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
@@ -91,7 +93,7 @@ fun CartScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.DeleteOutline,
-                                    contentDescription = "Clear all",
+                                    contentDescription = "Delete selected",
                                     tint = Color(0xFFEF5350),
                                     modifier = Modifier.size(18.dp)
                                 )

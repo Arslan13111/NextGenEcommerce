@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.nextgenecommerce.data.models.ProductCategory
 import com.example.nextgenecommerce.presentation.components.ProductCard
+import com.example.nextgenecommerce.presentation.components.ProductSyncEffect
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.ProductViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.WishlistViewModel
@@ -42,6 +43,8 @@ fun ProductListScreen(
 ) {
     val categoryProducts by viewModel.categoryProducts.collectAsStateWithLifecycle()
     val wishlistItems by wishlistViewModel.wishlistItems.collectAsStateWithLifecycle()
+
+    ProductSyncEffect(viewModel)
 
     var isLoading by remember { mutableStateOf(true) }
     var selectedSubcategory by remember { mutableStateOf<String?>(null) }
@@ -90,6 +93,7 @@ fun ProductListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 // ── Top bar row ──────────────────────────────────────────
@@ -313,8 +317,9 @@ private fun SortBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 24.dp)
         ) {
             Row(
                 modifier = Modifier

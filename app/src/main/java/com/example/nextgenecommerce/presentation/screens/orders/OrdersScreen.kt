@@ -338,26 +338,32 @@ private fun getStatusColor(status: OrderStatus): androidx.compose.ui.graphics.Co
         OrderStatus.PROCESSING, OrderStatus.PACKED -> MaterialTheme.colorScheme.tertiary
         OrderStatus.READY_FOR_PICKUP, OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY -> MaterialTheme.colorScheme.primary
         OrderStatus.DELIVERED -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
-        OrderStatus.RETURN_REQUESTED -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
-        OrderStatus.RETURNED -> androidx.compose.ui.graphics.Color(0xFF6D4C41)
+        OrderStatus.RETURN_REQUESTED  -> androidx.compose.ui.graphics.Color(0xFF6A1B9A)
+        OrderStatus.RETURN_APPROVED   -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
+        OrderStatus.RETURN_IN_TRANSIT -> androidx.compose.ui.graphics.Color(0xFF1565C0)
+        OrderStatus.RETURN_RECEIVED   -> androidx.compose.ui.graphics.Color(0xFF00838F)
+        OrderStatus.RETURNED          -> androidx.compose.ui.graphics.Color(0xFF6D4C41)
         OrderStatus.CANCELLED, OrderStatus.RETURN_REJECTED -> MaterialTheme.colorScheme.error
     }
 }
 
 private fun formatStatus(status: OrderStatus): String {
     return when (status) {
-        OrderStatus.PENDING -> "Pending"
-        OrderStatus.CONFIRMED -> "Confirmed"
-        OrderStatus.PROCESSING -> "Processing"
-        OrderStatus.PACKED -> "Packed"
-        OrderStatus.READY_FOR_PICKUP -> "Ready for Pickup"
-        OrderStatus.SHIPPED -> "Shipped"
-        OrderStatus.OUT_FOR_DELIVERY -> "Out for Delivery"
-        OrderStatus.DELIVERED -> "Delivered"
-        OrderStatus.CANCELLED -> "Cancelled"
-        OrderStatus.RETURN_REQUESTED -> "Return Requested"
-        OrderStatus.RETURNED -> "Returned"
-        OrderStatus.RETURN_REJECTED -> "Return Rejected"
+        OrderStatus.PENDING            -> "Pending"
+        OrderStatus.CONFIRMED          -> "Confirmed"
+        OrderStatus.PROCESSING         -> "Processing"
+        OrderStatus.PACKED             -> "Packed"
+        OrderStatus.READY_FOR_PICKUP   -> "Ready for Pickup"
+        OrderStatus.SHIPPED            -> "Shipped"
+        OrderStatus.OUT_FOR_DELIVERY   -> "Out for Delivery"
+        OrderStatus.DELIVERED          -> "Delivered"
+        OrderStatus.CANCELLED          -> "Cancelled"
+        OrderStatus.RETURN_REQUESTED   -> "Return Requested"
+        OrderStatus.RETURN_APPROVED    -> "Return Approved"
+        OrderStatus.RETURN_IN_TRANSIT  -> "Return In Transit"
+        OrderStatus.RETURN_RECEIVED    -> "Return Received"
+        OrderStatus.RETURNED           -> "Returned"
+        OrderStatus.RETURN_REJECTED    -> "Return Rejected"
     }
 }
 

@@ -8,8 +8,9 @@ import com.example.nextgenecommerce.data.remote.ApiService
 import com.example.nextgenecommerce.util.Resource
 import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -86,9 +87,17 @@ class ProductRepository @Inject constructor(
     }
 
     suspend fun deleteProductById(productId: String) {
-        getProductById(productId).collect { product ->
-            product?.let { deleteProduct(it) }
+        productDao.deleteProductById(productId)
+    }
+
+    private suspend fun replaceLocalProductCache(remoteProducts: List<ProductEntity>) {
+        if (remoteProducts.isEmpty()) {
+            productDao.deleteAllProducts()
+            return
         }
+
+        productDao.insertProducts(remoteProducts)
+        productDao.deleteProductsNotInIds(remoteProducts.map { it.id })
     }
 
     /**
@@ -106,17 +115,11 @@ class ProductRepository @Inject constructor(
 
             Log.d(TAG, "Fetched ${supabaseProducts.size} products from Supabase")
 
-            if (supabaseProducts.isEmpty()) {
-                Log.d(TAG, "Supabase returned empty list, keeping local cache")
-                emit(Resource.Success(emptyList()))
-                return@flow
-            }
-
             // Convert to Room entities
             val productEntities = supabaseProducts.map { it.toEntity() }
 
             // Upsert — never wipe the cache first (causes empty-list flash in UI)
-            productDao.insertProducts(productEntities)
+            replaceLocalProductCache(productEntities)
 
             Log.d(TAG, "Saved ${productEntities.size} products to Room database")
             emit(Resource.Success(productEntities))
@@ -143,6 +146,7 @@ class ProductRepository @Inject constructor(
                 productDao.insertProduct(entity)
                 emit(Resource.Success(entity))
             } else {
+                productDao.deleteProductById(productId)
                 emit(Resource.Error("Product not found"))
             }
         } catch (e: Exception) {
@@ -258,16 +262,35 @@ class ProductRepository @Inject constructor(
     suspend fun updateProductInSupabase(product: ProductEntity): Flow<Resource<ProductEntity>> = flow {
         emit(Resource.Loading())
         try {
-            val supabaseProduct = product.toSupabaseProduct()
-
             Log.d(TAG, "Updating product in Supabase: ${product.id}")
 
+            // Use a payload that excludes retailer_id so the DB value is never wiped
+            val payload = ProductAdminUpdatePayload(
+                name         = product.name,
+                description  = product.description,
+                price        = product.price,
+                originalPrice = product.originalPrice,
+                category     = product.category.name,
+                subCategory  = product.subCategory,
+                images       = product.images,
+                imageUrl     = product.images.firstOrNull(),
+                lensId       = product.lensId,
+                sizes        = product.sizes,
+                colors       = product.colors,
+                colorImages  = product.colorImages,
+                stock        = product.stock,
+                inStock      = product.stock > 0,
+                isFeatured   = product.isFeatured,
+                isNew        = product.isNew,
+                brand        = product.brand,
+                tags         = product.tags
+            )
+
             postgrest.from(PRODUCTS_TABLE)
-                .update(supabaseProduct) {
+                .update(payload) {
                     filter { eq("id", product.id) }
                 }
 
-            // Also update local database
             productDao.insertProduct(product)
 
             Log.d(TAG, "Product updated successfully: ${product.id}")
@@ -300,8 +323,7 @@ class ProductRepository @Inject constructor(
                 }
 
             // Also delete from local database
-            val product = productDao.getProductById(productId).first()
-            product?.let { productDao.deleteProduct(it) }
+            productDao.deleteProductById(productId)
 
             Log.d(TAG, "Product deleted successfully: $productId")
             emit(Resource.Success(true))
@@ -317,4 +339,66 @@ class ProductRepository @Inject constructor(
             emit(Resource.Error(errorMessage))
         }
     }
+
+    suspend fun assignAllProductsToRetailer(retailerId: String): Flow<Resource<Int>> = flow {
+        emit(Resource.Loading())
+        try {
+            // Fetch only admin/unassigned products (retailer_id IS NULL)
+            val adminProducts = postgrest.from(PRODUCTS_TABLE)
+                .select()
+                .decodeList<SupabaseProduct>()
+                .filter { it.retailerId == null }
+            if (adminProducts.isEmpty()) {
+                emit(Resource.Error("No unassigned products found to copy"))
+                return@flow
+            }
+            // Fetch existing product names for this retailer to avoid duplicate copies
+            val existing = postgrest.from(PRODUCTS_TABLE)
+                .select { filter { eq("retailer_id", retailerId) } }
+                .decodeList<SupabaseProduct>()
+                .map { it.name.lowercase() }
+                .toSet()
+
+            var copied = 0
+            adminProducts.forEach { product ->
+                if (product.name.lowercase() !in existing) {
+                    val copy = product.copy(
+                        id = UUID.randomUUID().toString(),
+                        retailerId = retailerId,
+                        retailerIds = emptyList()
+                    )
+                    postgrest.from(PRODUCTS_TABLE).insert(copy)
+                    productDao.insertProduct(copy.toEntity())
+                    copied++
+                }
+            }
+            emit(Resource.Success(copied))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to assign products"))
+        }
+    }
 }
+
+// Excludes retailer_id/retailer_ids/created_at so admin edits never wipe the DB assignment
+@Serializable
+private data class ProductAdminUpdatePayload(
+    val name: String,
+    val description: String,
+    val price: Double,
+    @SerialName("original_price") val originalPrice: Double,
+    val category: String,
+    @SerialName("sub_category") val subCategory: String,
+    val images: List<String>,
+    @SerialName("image_url") val imageUrl: String?,
+    @SerialName("lens_id") val lensId: String?,
+    val sizes: List<String>,
+    val colors: List<String>,
+    @SerialName("color_images") val colorImages: Map<String, String>,
+    val stock: Int,
+    @SerialName("in_stock") val inStock: Boolean,
+    @SerialName("is_featured") val isFeatured: Boolean,
+    @SerialName("is_new") val isNew: Boolean,
+    val brand: String,
+    val tags: List<String>,
+    @SerialName("updated_at") val updatedAt: Long = System.currentTimeMillis()
+)

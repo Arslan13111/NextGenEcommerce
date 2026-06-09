@@ -24,42 +24,27 @@ data class User(
     @SerialName("role")
     val role: String = "customer",
     @SerialName("updated_at")
-    val updatedAt: String? = null  // ISO 8601 timestamp from Supabase
+    val updatedAt: String? = null
 ) {
     /**
      * Check if this user has admin privileges.
-     * Admin is determined by:
-     * 1. role = 'admin' in the users table
-     * 2. OR user ID matches a hardcoded admin UID (fallback)
+     * Admin access comes only from the persisted users.role value.
      */
     fun isAdmin(): Boolean {
-        return role.equals("admin", ignoreCase = true) ||
-               id == AdminConfig.ADMIN_USER_ID ||
-               AdminConfig.ADMIN_EMAILS.any { it.equals(email, ignoreCase = true) }
+        return role.equals(AdminConfig.ADMIN_ROLE, ignoreCase = true)
     }
 
     fun isRetailer(): Boolean {
-        return role.equals("retailer", ignoreCase = true)
+        return role.equals(AdminConfig.RETAILER_ROLE, ignoreCase = true)
     }
 
     fun isDeliveryPartner(): Boolean {
-        return role.equals("delivery_partner", ignoreCase = true)
+        return role.equals(AdminConfig.DELIVERY_ROLE, ignoreCase = true)
     }
 }
 
 object AdminConfig {
-    // ── Add every admin email here ──────────────────────────────────────────
-    // Any email in this set bypasses the role/UUID checks entirely.
-    val ADMIN_EMAILS: Set<String> = setOf(
-        "arslanmunawar1311@gmail.com",
-        "huzaifanadeem1192@gmail.com"
-    )
-
-    // Optional: also paste the UUID from Supabase → Authentication → Users
-    // Leave as-is if you don't know it — ADMIN_EMAILS above is enough.
-    const val ADMIN_USER_ID = "YOUR_ADMIN_UUID_HERE"
-
-    const val ADMIN_ROLE    = "admin"
+    const val ADMIN_ROLE = "admin"
     const val CUSTOMER_ROLE = "customer"
     const val RETAILER_ROLE = "retailer"
     const val DELIVERY_ROLE = "delivery_partner"
@@ -75,21 +60,21 @@ enum class UserRole {
 data class Address(
     val id: String = "",
     val userId: String = "",
-    val label: String = "", // Home, Office, etc.
+    val label: String = "",
     val fullName: String = "",
     val phone: String = "",
     val addressLine1: String = "",
     val addressLine2: String = "",
     val city: String = "",
-    val province: String = "", // Changed from state for Pakistan
-    val postalCode: String = "", // Changed from zipCode
-    val country: String = "Pakistan", // Changed from USA
+    val province: String = "",
+    val postalCode: String = "",
+    val country: String = "Pakistan",
     val isDefault: Boolean = false
 )
 
 /**
- * Payment transaction model for tracking payment status
- * Used for Easypaisa, JazzCash mock payments
+ * Payment transaction model for tracking payment status.
+ * Used for Easypaisa and JazzCash mock payments.
  */
 data class PaymentTransaction(
     val id: String = "",

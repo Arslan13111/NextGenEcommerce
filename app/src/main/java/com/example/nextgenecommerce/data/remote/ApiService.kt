@@ -16,6 +16,11 @@ interface ApiService {
     @POST("auth/google-login")
     suspend fun googleLogin(@Body request: GoogleLoginRequest): Response<AuthResponse>
 
+    @DELETE("auth/account")
+    suspend fun deleteAccount(
+        @Header("Authorization") authorization: String
+    ): Response<BaseResponse>
+
     // Product endpoints
     @GET("products")
     suspend fun getProducts(
@@ -42,7 +47,10 @@ interface ApiService {
 
     // Order endpoints
     @POST("orders")
-    suspend fun createOrder(@Body request: CreateOrderRequest): Response<OrderResponse>
+    suspend fun createOrder(
+        @Header("Authorization") authorization: String,
+        @Body request: CreateOrderRequest
+    ): Response<OrderResponse>
 
     @GET("orders/{id}")
     suspend fun getOrderById(@Path("id") orderId: String): Response<OrderResponse>
@@ -55,6 +63,18 @@ interface ApiService {
         @Path("id") orderId: String,
         @Body request: UpdateOrderStatusRequest
     ): Response<OrderResponse>
+
+    @POST("api/safepay/session")
+    suspend fun createSafepaySession(
+        @Header("Authorization") authorization: String,
+        @Body request: SafepaySessionRequest
+    ): Response<SafepaySessionResponse>
+
+    @GET("orders/{id}/payment/status")
+    suspend fun getPaymentStatus(
+        @Header("Authorization") authorization: String,
+        @Path("id") orderId: String
+    ): Response<PaymentStatusResponse>
 
     // Review endpoints
     @POST("reviews")
@@ -159,6 +179,25 @@ data class OrdersResponse(
 
 data class UpdateOrderStatusRequest(
     val status: OrderStatus
+)
+
+data class SafepaySessionRequest(
+    val orderId: String,
+    val currency: String = "PKR"
+)
+
+data class SafepaySessionResponse(
+    val success: Boolean,
+    val tracker: String?,
+    val checkoutUrl: String?,
+    val message: String?
+)
+
+data class PaymentStatusResponse(
+    val success: Boolean,
+    val paymentStatus: String?,
+    val paymentMethod: String?,
+    val message: String?
 )
 
 data class ReviewResponse(

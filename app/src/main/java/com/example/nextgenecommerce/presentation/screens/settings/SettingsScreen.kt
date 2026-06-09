@@ -23,19 +23,44 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.nextgenecommerce.presentation.navigation.Screen
+import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.ThemeViewModel
+import com.example.nextgenecommerce.util.Resource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     navController: NavController,
-    themeViewModel: ThemeViewModel = hiltViewModel()
+    themeViewModel: ThemeViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
     val darkModeEnabled by themeViewModel.darkMode.collectAsState()
     val useSystemTheme by themeViewModel.useSystemTheme.collectAsState()
     val notificationsEnabled by themeViewModel.notificationsEnabled.collectAsState()
+    val deleteAccountState by authViewModel.deleteAccountState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    val isDeletingAccount = deleteAccountState is Resource.Loading<*>
+
+    LaunchedEffect(deleteAccountState) {
+        when (val state = deleteAccountState) {
+            is Resource.Success -> {
+                authViewModel.resetDeleteAccountState()
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            is Resource.Error -> {
+                snackbarHostState.showSnackbar(state.message ?: "Failed to delete account")
+                authViewModel.resetDeleteAccountState()
+            }
+            else -> Unit
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -110,21 +135,29 @@ fun SettingsScreen(
                 icon = Icons.Default.Security,
                 title = "Privacy Policy",
                 subtitle = "How we handle your personal data",
-                onClick = { /* navigate */ }
+                onClick = { navController.navigate(Screen.PrivacyPolicy.route) }
             )
 
             SettingsLinkItem(
                 icon = Icons.Default.Description,
                 title = "Terms & Conditions",
                 subtitle = "App usage terms",
-                onClick = { /* navigate */ }
+                onClick = { navController.navigate(Screen.TermsConditions.route) }
             )
 
             SettingsLinkItem(
                 icon = Icons.Default.Tune,
                 title = "Data Preferences",
                 subtitle = "Manage analytics and tracking",
-                onClick = { /* navigate */ }
+                onClick = { navController.navigate(Screen.DataPreferences.route) }
+            )
+
+            DestructiveSettingsLinkItem(
+                icon = Icons.Default.DeleteForever,
+                title = "Delete Account",
+                subtitle = "Permanently remove your sign-in account",
+                enabled = !isDeletingAccount,
+                onClick = { showDeleteAccountDialog = true }
             )
 
             // ── About ─────────────────────────────────────────────────────────
@@ -165,6 +198,44 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDeletingAccount) showDeleteAccountDialog = false
+            },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("Delete Account") },
+            text = {
+                Text("This removes your sign-in account, saved addresses, device notification token, and anonymizes your profile details. Order records may remain where required for payment, refund, or legal reasons.")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeletingAccount,
+                    onClick = {
+                        showDeleteAccountDialog = false
+                        authViewModel.deleteAccount()
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDeletingAccount,
+                    onClick = { showDeleteAccountDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -251,5 +322,58 @@ private fun SettingsLinkItem(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun DestructiveSettingsLinkItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            icon,
+            null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(22.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.error
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (enabled) {
+            Icon(
+                Icons.Default.ChevronRight,
+                null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
     }
 }

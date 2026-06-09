@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.example.nextgenecommerce.R
 import androidx.navigation.NavController
+import com.example.nextgenecommerce.presentation.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,22 +194,22 @@ fun AboutScreen(
 
                 LinkItem(
                     text = "Terms of Service",
-                    onClick = { /* TODO: Open terms */ }
+                    onClick = { navController.navigate(Screen.TermsConditions.route) }
                 )
 
                 LinkItem(
                     text = "Privacy Policy",
-                    onClick = { /* TODO: Open privacy policy */ }
+                    onClick = { navController.navigate(Screen.PrivacyPolicy.route) }
                 )
 
                 LinkItem(
                     text = "Return & Refund Policy",
-                    onClick = { /* TODO: Open return policy */ }
+                    onClick = { navController.navigate(Screen.ProductReturn.route) }
                 )
 
                 LinkItem(
                     text = "Shipping Policy",
-                    onClick = { /* TODO: Open shipping policy */ }
+                    onClick = { navController.navigate(Screen.DeliveryTerms.route) }
                 )
             }
 
@@ -250,7 +251,7 @@ fun AboutScreen(
 
             // Copyright
             Text(
-                text = "© 2024 NextGen Store. All rights reserved.",
+                text = "(c) 2026 NextGen Store. All rights reserved.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

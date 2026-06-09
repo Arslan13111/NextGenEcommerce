@@ -221,6 +221,9 @@ fun ProfileScreen(
         ProfileMenuRow(icon = Icons.Default.Receipt, title = "My purchases") {
             navController.navigate(Screen.Orders.route)
         }
+        ProfileMenuRow(icon = Icons.Default.AccountBalanceWallet, title = "My Vault") {
+            navController.navigate(Screen.Vault.route)
+        }
         ProfileMenuRow(icon = Icons.Default.LocalShipping, title = "Terms of delivery") {
             navController.navigate(Screen.DeliveryTerms.route)
         }

@@ -1,5 +1,6 @@
 package com.example.nextgenecommerce.api
 
+import com.example.nextgenecommerce.BuildConfig
 import com.example.nextgenecommerce.util.ApiConstants
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -12,7 +13,11 @@ import java.util.concurrent.TimeUnit
 object TryonaClient {
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.ENABLE_HTTP_LOGGING) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
 
     private val okHttpClient = OkHttpClient.Builder()

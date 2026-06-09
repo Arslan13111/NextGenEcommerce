@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextgenecommerce.data.models.Order
 import com.example.nextgenecommerce.data.models.OrderStatus
 import com.example.nextgenecommerce.data.remote.CreateOrderRequest
+import com.example.nextgenecommerce.data.repository.AdminVaultRepository
 import com.example.nextgenecommerce.data.repository.OrderRepository
 import com.example.nextgenecommerce.data.repository.StorageRepository
 import com.example.nextgenecommerce.util.CardTierUtil
@@ -25,7 +26,8 @@ import javax.inject.Inject
 class OrderViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val storageRepository: StorageRepository,
-    private val authRepository: com.example.nextgenecommerce.data.repository.AuthRepository
+    private val authRepository: com.example.nextgenecommerce.data.repository.AuthRepository,
+    private val adminVaultRepository: AdminVaultRepository
 ) : ViewModel() {
 
     private val _selectedReturnImages = MutableStateFlow<List<Uri>>(emptyList())
@@ -241,6 +243,10 @@ class OrderViewModel @Inject constructor(
 
     fun updateOrderStatus(orderId: String, status: OrderStatus) {
         viewModelScope.launch {
+            if (status == OrderStatus.DELIVERED) {
+                val order = _allAdminOrders.value.find { it.id == orderId }
+                order?.let { adminVaultRepository.recordCommissionForOrder(it.id, it.subtotal) }
+            }
             orderRepository.updateOrderStatus(orderId, status).collect {
                 _updateOrderStatusState.value = it
                 if (it is Resource.Success) loadAllOrdersForAdmin()

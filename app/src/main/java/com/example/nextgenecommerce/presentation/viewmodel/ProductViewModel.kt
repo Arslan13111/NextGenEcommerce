@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.nextgenecommerce.data.models.ProductCategory
 import com.example.nextgenecommerce.data.models.ProductEntity
 import com.example.nextgenecommerce.data.repository.ProductRepository
+import com.example.nextgenecommerce.data.repository.RetailerRepository
 import com.example.nextgenecommerce.data.repository.StorageRepository
 import com.example.nextgenecommerce.util.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,14 +16,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ProductViewModel @Inject constructor(
     private val productRepository: ProductRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
+    private val retailerRepository: RetailerRepository
 ) : ViewModel() {
 
     private val _allProducts = MutableStateFlow<List<ProductEntity>>(emptyList())
@@ -49,6 +50,7 @@ class ProductViewModel @Inject constructor(
     private val _productOperationState = MutableStateFlow<Resource<Any>?>(null)
     val productOperationState: StateFlow<Resource<Any>?> = _productOperationState.asStateFlow()
 
+    private var productSyncJob: Job? = null
     private var categoryLoadJob: Job? = null
 
     init {
@@ -57,12 +59,7 @@ class ProductViewModel @Inject constructor(
         loadNewProducts()
         // Only fetch from Supabase when Room cache is empty (first install).
         // Calling sync on every ViewModel creation causes delete→insert flicker on all screens.
-        viewModelScope.launch {
-            val isEmpty = productRepository.getAllProducts().first().isEmpty()
-            if (isEmpty) {
-                productRepository.syncProductsFromSupabase().collect { _syncState.value = it }
-            }
-        }
+        syncProductsFromSupabase()
     }
 
     private fun loadProducts() {
@@ -136,7 +133,8 @@ class ProductViewModel @Inject constructor(
      * Sync all products from Supabase to local Room database
      */
     fun syncProductsFromSupabase() {
-        viewModelScope.launch {
+        if (productSyncJob?.isActive == true) return
+        productSyncJob = viewModelScope.launch {
             productRepository.syncProductsFromSupabase().collect {
                 _syncState.value = it
             }
@@ -231,6 +229,48 @@ class ProductViewModel @Inject constructor(
      */
     fun resetProductOperationState() {
         _productOperationState.value = null
+    }
+
+    private val _assignState = MutableStateFlow<Resource<Int>?>(null)
+    val assignState: StateFlow<Resource<Int>?> = _assignState.asStateFlow()
+
+    fun assignToNextGenEcommerce() {
+        viewModelScope.launch {
+            _assignState.value = Resource.Loading()
+            val retailer = retailerRepository.findRetailerByStoreName("Next Gen Ecommerce")
+                ?: retailerRepository.findRetailerByStoreName("Next Gen E-commerce")
+            if (retailer == null) {
+                _assignState.value = Resource.Error("Retailer 'Next Gen Ecommerce' not found in the system")
+                return@launch
+            }
+            productRepository.assignAllProductsToRetailer(retailer.id)
+                .collect { _assignState.value = it }
+        }
+    }
+
+    fun resetAssignState() {
+        _assignState.value = null
+    }
+
+    private val _saifAssignState = MutableStateFlow<Resource<Int>?>(null)
+    val saifAssignState: StateFlow<Resource<Int>?> = _saifAssignState.asStateFlow()
+
+    fun assignToSaifRetailers() {
+        viewModelScope.launch {
+            _saifAssignState.value = Resource.Loading()
+            val saif = retailerRepository.findRetailerByStoreName("Saif Retailers")
+                ?: retailerRepository.findRetailerByStoreName("Saif")
+            if (saif == null) {
+                _saifAssignState.value = Resource.Error("Retailer 'Saif Retailers' not found in the system")
+                return@launch
+            }
+            productRepository.assignAllProductsToRetailer(saif.id)
+                .collect { _saifAssignState.value = it }
+        }
+    }
+
+    fun resetSaifAssignState() {
+        _saifAssignState.value = null
     }
 
     // =====================================================

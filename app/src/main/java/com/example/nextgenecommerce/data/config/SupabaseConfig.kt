@@ -1,11 +1,14 @@
 package com.example.nextgenecommerce.data.config
 
+import com.example.nextgenecommerce.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import io.github.jan.supabase.serializer.KotlinXSerializer
@@ -13,9 +16,8 @@ import kotlinx.serialization.json.Json
 
 object SupabaseConfig {
 
-    // TODO: Replace these with your actual Supabase project credentials
-    private const val SUPABASE_URL = "https://ccrscwaixfmfglylcjpj.supabase.co"
-    private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjcnNjd2FpeGZtZmdseWxjanBqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4OTcwMTEsImV4cCI6MjA3ODQ3MzAxMX0.175rDjZRCH4v7_UTw-43q3aXkjrzLNoDPl3avWsVAcE"
+    private val SUPABASE_URL = BuildConfig.SUPABASE_URL
+    private val SUPABASE_ANON_KEY = BuildConfig.SUPABASE_ANON_KEY
 
     /**
      * Google Web Client ID for Sign-In.
@@ -27,9 +29,11 @@ object SupabaseConfig {
      * 4. Look for "Web client (Auto-created for Google Sign-in)" or similar under OAuth 2.0 Client IDs
      * 5. DO NOT use the "Android" client ID here; use the "Web" client ID.
      */
-    const val GOOGLE_WEB_CLIENT_ID = "601314722995-6bbptts1f4oelm82lko3q594pa3ip308.apps.googleusercontent.com"
+    val GOOGLE_WEB_CLIENT_ID: String = BuildConfig.GOOGLE_WEB_CLIENT_ID
 
     val client: SupabaseClient by lazy {
+        require(SUPABASE_URL.isNotBlank()) { "SUPABASE_URL must be configured in local.properties or CI." }
+        require(SUPABASE_ANON_KEY.isNotBlank()) { "SUPABASE_ANON_KEY must be configured in local.properties or CI." }
         createSupabaseClient(
             supabaseUrl = SUPABASE_URL,
             supabaseKey = SUPABASE_ANON_KEY
@@ -43,6 +47,7 @@ object SupabaseConfig {
                 })
             }
             install(Storage)
+            install(Realtime)
         }
     }
 
@@ -54,4 +59,7 @@ object SupabaseConfig {
 
     val storage: Storage
         get() = client.storage
+
+    val realtime: Realtime
+        get() = client.realtime
 }

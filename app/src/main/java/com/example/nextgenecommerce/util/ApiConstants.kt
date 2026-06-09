@@ -1,5 +1,7 @@
 package com.example.nextgenecommerce.util
 
+import com.example.nextgenecommerce.BuildConfig
+
 /**
  * API Configuration Constants
  *
@@ -35,8 +37,8 @@ object ApiConstants {
      * Tryona AI Try-On API Configuration
      */
     object Tryona {
-        const val BASE_URL = "https://api.tryona.com/"
-        const val API_KEY = "ev7tVFRP1vTnYfGjhDYv46eS" // Private Key
+        val BASE_URL: String = BuildConfig.TRYONA_BASE_URL
+        val API_KEY: String = BuildConfig.TRYONA_API_KEY
 
         // Multipart field names
         const val FIELD_PERSON_FILE = "person_file"
@@ -80,7 +82,7 @@ object ApiConstants {
      */
     object App {
         // Enable debug logging
-        const val DEBUG_MODE = true
+        val DEBUG_MODE: Boolean = BuildConfig.DEBUG
 
         // Retry configuration
         const val MAX_RETRY_ATTEMPTS = 3

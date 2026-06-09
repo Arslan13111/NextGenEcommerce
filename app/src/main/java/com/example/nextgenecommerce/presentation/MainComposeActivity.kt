@@ -1,8 +1,11 @@
 package com.example.nextgenecommerce.presentation
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,8 +41,10 @@ import com.example.nextgenecommerce.presentation.navigation.BottomNavItem
 import com.example.nextgenecommerce.presentation.navigation.NavGraph
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.theme.NextGenEcommerceTheme
-import com.example.nextgenecommerce.presentation.viewmodel.ThemeViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.AuthViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.SendNotificationViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.ThemeViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -49,9 +55,17 @@ import androidx.core.view.WindowCompat
 class MainComposeActivity : ComponentActivity() {
     private val themeViewModel: ThemeViewModel by viewModels()
 
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result handled silently */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
+        // Request POST_NOTIFICATIONS on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         // Enable edge-to-edge to ensure WindowInsets (like IME) are correctly dispatched
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -74,6 +88,22 @@ class MainComposeActivity : ComponentActivity() {
 fun MainApp() {
     val navController = rememberNavController()
     val cartViewModel = hiltViewModel<CartViewModel>()
+    val authViewModel = hiltViewModel<AuthViewModel>()
+    val sendNotificationViewModel = hiltViewModel<SendNotificationViewModel>()
+    val currentUser by authViewModel.currentUser.collectAsState()
+
+    // Start Realtime notification listener once the user is authenticated
+    LaunchedEffect(currentUser?.id) {
+        currentUser?.let { user ->
+            val role = when {
+                user.isAdmin() -> "admin"
+                user.isRetailer() -> "retailer"
+                user.isDeliveryPartner() -> "delivery_partner"
+                else -> "customer"
+            }
+            sendNotificationViewModel.startListeningForIncoming(role, user.id)
+        }
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -102,17 +132,43 @@ fun MainApp() {
         }
     }
 
+    val floatingBottomNavInset = 92.dp
+    val navHostModifier = when (currentRoute) {
+        Screen.Splash.route,
+        Screen.Login.route,
+        Screen.Register.route,
+        Screen.OrderSuccess.route -> Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+
+        Screen.Profile.route -> Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(bottom = floatingBottomNavInset)
+
+        Screen.Wishlist.route,
+        Screen.Search.route -> Modifier
+            .fillMaxSize()
+            .padding(bottom = floatingBottomNavInset)
+
+        Screen.Notifications.route,
+        Screen.Vault.route -> Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+
+        else -> Modifier.fillMaxSize()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            // Removed bottomBar from Scaffold slot to prevent layout jumping
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { innerPadding ->
-            // Use top padding from Scaffold, but keep bottom stable
             NavGraph(
                 navController = navController,
                 cartViewModel = cartViewModel,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding()),
+                modifier = navHostModifier.padding(innerPadding),
                 startDestination = Screen.Splash.route
             )
         }

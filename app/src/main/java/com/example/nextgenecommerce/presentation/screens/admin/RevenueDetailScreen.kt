@@ -12,187 +12,202 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.example.nextgenecommerce.data.models.OrderStatus
-import com.example.nextgenecommerce.data.models.PaymentStatus
-import com.example.nextgenecommerce.presentation.viewmodel.OrderViewModel
+import com.example.nextgenecommerce.data.models.AdminCommission
+import com.example.nextgenecommerce.data.models.VaultSummary
+import com.example.nextgenecommerce.presentation.viewmodel.AdminVaultViewModel
+import com.example.nextgenecommerce.util.Resource
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RevenueDetailScreen(
     navController: NavController,
-    orderViewModel: OrderViewModel = hiltViewModel()
+    adminVaultViewModel: AdminVaultViewModel = hiltViewModel()
 ) {
-    val allOrders by orderViewModel.allAdminOrders.collectAsState()
-    
+    val vaultSummary by adminVaultViewModel.vaultSummary.collectAsState()
+    val history by adminVaultViewModel.history.collectAsState()
+
     LaunchedEffect(Unit) {
-        orderViewModel.loadAllOrdersForAdmin()
+        adminVaultViewModel.loadVaultSummary()
+        adminVaultViewModel.loadHistory()
     }
-    
-    // Calculations based on logic in AdminDashboardScreen
-    val totalRevenue = allOrders.filter {
-        it.paymentStatus != PaymentStatus.FAILED &&
-        it.status != OrderStatus.CANCELLED &&
-        it.paymentStatus != PaymentStatus.REFUNDED
-    }.sumOf { it.total }
-
-    val returnedAmount = allOrders.filter {
-        it.paymentStatus == PaymentStatus.REFUNDED
-    }.sumOf { it.total }
-
-    val rejectedReturnsAmount = allOrders.filter {
-        it.status == OrderStatus.RETURN_REJECTED
-    }.sumOf { it.total }
-
-    val pendingRefundsAmount = allOrders.filter {
-        it.status == OrderStatus.RETURNED && it.paymentStatus != PaymentStatus.REFUNDED
-    }.sumOf { it.total }
-    
-    // Approximate profit (assuming 20% margin for visualization)
-    val estimatedProfit = totalRevenue * 0.2 
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Revenue Details", fontWeight = FontWeight.Bold) },
+                title = { Text("Commission Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        adminVaultViewModel.loadVaultSummary()
+                        adminVaultViewModel.loadHistory()
+                    }) {
+                        Icon(Icons.Default.Refresh, "Refresh")
                     }
                 }
             )
         }
     ) { padding ->
+        val summaryData = when (val v = vaultSummary) {
+            is Resource.Success -> v.data
+            is Resource.Error   -> VaultSummary(0.0, 0.0, 0.0)
+            else                -> null
+        }
+
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                RevenueSummaryCard(
-                    totalRevenue = totalRevenue,
-                    estimatedProfit = estimatedProfit
-                )
+                CommissionSummaryCard(summaryData = summaryData)
             }
 
-            item {
-                Text(
-                    "Breakdown",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
+            when (val h = history) {
+                null, is Resource.Loading -> {
+                    item {
+                        Box(
+                            Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                    }
+                }
+                is Resource.Error -> {
+                    item {
+                        Text(
+                            h.message ?: "Failed to load history",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                is Resource.Success -> {
+                    val entries = h.data
+                        ?.sortedByDescending { it.createdAt }
+                        ?: emptyList()
 
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DetailRow(
-                        title = "Gross Revenue",
-                        amount = totalRevenue + returnedAmount,
-                        icon = Icons.Default.Payments,
-                        color = Color(0xFF0288D1)
-                    )
-                    DetailRow(
-                        title = "Refunded Amount",
-                        amount = returnedAmount,
-                        icon = Icons.Default.History,
-                        color = Color(0xFFD32F2F)
-                    )
-                    DetailRow(
-                        title = "Rejected Returns",
-                        amount = rejectedReturnsAmount,
-                        icon = Icons.Default.Cancel,
-                        color = Color(0xFF388E3C)
-                    )
-                    DetailRow(
-                        title = "Pending Refunds",
-                        amount = pendingRefundsAmount,
-                        icon = Icons.Default.Schedule,
-                        color = Color(0xFFF57C00)
-                    )
-                    Divider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    DetailRow(
-                        title = "Net Revenue",
-                        amount = totalRevenue,
-                        icon = Icons.Default.AccountBalanceWallet,
-                        color = MaterialTheme.colorScheme.primary,
-                        isBold = true
-                    )
+                    if (entries.isEmpty()) {
+                        item {
+                            Box(
+                                Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.AccountBalance,
+                                        null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                    Text(
+                                        "No commissions recorded yet",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            Text(
+                                "Commission History  (${entries.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        items(entries, key = { it.id }) { commission ->
+                            CommissionEntryRow(commission = commission)
+                        }
+                    }
                 }
             }
-            
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Recent Transactions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            
-            val transactions = allOrders.sortedByDescending { it.createdAt }.take(20)
-            items(transactions) { order ->
-                TransactionItem(order = order)
-            }
+
+            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
 
 @Composable
-private fun RevenueSummaryCard(totalRevenue: Double, estimatedProfit: Double) {
-    val pkrFormat = NumberFormat.getCurrencyInstance(Locale("en", "PK")).apply {
-        currency = Currency.getInstance("PKR")
-        maximumFractionDigits = 0
-    }
-
+private fun CommissionSummaryCard(summaryData: VaultSummary?) {
+    val pkrFormat = NumberFormat.getNumberInstance(Locale.US)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20))
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                "Total Net Revenue",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
-            Text(
-                pkrFormat.format(totalRevenue),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Est. Profit (20%)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        pkrFormat.format(estimatedProfit),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF388E3C)
-                    )
+                Icon(
+                    Icons.Default.AccountBalance,
+                    null,
+                    tint = Color(0xFF81C784),
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    "Total Commission Earned",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White
+                )
+            }
+
+            if (summaryData == null) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF81C784),
+                    trackColor = Color(0xFF2E7D32)
+                )
+            } else {
+                Text(
+                    "PKR ${pkrFormat.format(summaryData.total.toLong())}",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = Color.White
+                )
+                Divider(color = Color(0xFF2E7D32))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "From Retailers (5%)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFA5D6A7)
+                        )
+                        Text(
+                            "PKR ${pkrFormat.format(summaryData.retailerCommission.toLong())}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "From Deliveries (2%)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFA5D6A7)
+                        )
+                        Text(
+                            "PKR ${pkrFormat.format(summaryData.deliveryCommission.toLong())}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
@@ -200,90 +215,58 @@ private fun RevenueSummaryCard(totalRevenue: Double, estimatedProfit: Double) {
 }
 
 @Composable
-private fun DetailRow(
-    title: String,
-    amount: Double,
-    icon: ImageVector,
-    color: Color,
-    isBold: Boolean = false
-) {
-    val pkrFormat = NumberFormat.getNumberInstance(Locale.US)
-    
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(color.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
-        }
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        Text(
-            title,
-            modifier = Modifier.weight(1f),
-            style = if (isBold) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) 
-                    else MaterialTheme.typography.bodyMedium
-        )
-        
-        Text(
-            "PKR ${pkrFormat.format(amount)}",
-            style = if (isBold) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) 
-                    else MaterialTheme.typography.bodyMedium,
-            color = if (isBold) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
+private fun CommissionEntryRow(commission: AdminCommission) {
+    val pkrFormat = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val isRetailer = commission.commissionType == "RETAILER"
+    val entryColor = if (isRetailer) Color(0xFF2E7D32) else Color(0xFF1565C0)
+    val label      = if (isRetailer) "Retailer Sale (5%)" else "Delivery Fee (2%)"
+    val icon       = if (isRetailer) Icons.Default.Store else Icons.Default.LocalShipping
 
-@Composable
-private fun TransactionItem(order: com.example.nextgenecommerce.data.models.Order) {
-    val pkrFormat = NumberFormat.getNumberInstance(Locale.US)
-    val date = java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(order.createdAt))
-    
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
+    val dateStr = remember(commission.createdAt) {
+        runCatching {
+            val parsed = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+                .parse(commission.createdAt)
+            SimpleDateFormat("MMM d, yyyy  •  hh:mm a", Locale.getDefault()).format(parsed!!)
+        }.getOrDefault(commission.createdAt.take(10))
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(entryColor.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = entryColor, modifier = Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Text(
+                    "Order: …${commission.orderId.takeLast(8)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    dateStr,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Text(
-                "#${order.orderNumber}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                date,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                "PKR ${pkrFormat.format(order.total)}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                order.status.name.lowercase().replaceFirstChar { it.uppercase() }.replace("_", " "),
-                style = MaterialTheme.typography.labelSmall,
-                color = when(order.status) {
-                    OrderStatus.DELIVERED -> Color(0xFF388E3C)
-                    OrderStatus.CANCELLED -> Color(0xFFD32F2F)
-                    OrderStatus.RETURN_REJECTED -> Color(0xFFD32F2F)
-                    else -> MaterialTheme.colorScheme.primary
-                }
+                "+PKR ${pkrFormat.format(commission.amount.toLong())}",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = entryColor
             )
         }
     }
-    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -7,18 +9,50 @@ plugins {
     kotlin("plugin.serialization")
 }
 
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun configValue(name: String, defaultValue: String = ""): String =
+    localProperties.getProperty(name)
+        ?: providers.environmentVariable(name).orNull
+        ?: defaultValue
+
+fun quotedConfig(name: String, defaultValue: String = ""): String =
+    "\"${configValue(name, defaultValue).replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "com.example.nextgenecommerce"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.nextgenecommerce"
         minSdk = 26  // Required for ARCore
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        manifestPlaceholders["snapCameraKitApiToken"] = configValue("SNAP_CAMERA_KIT_API_TOKEN")
+        manifestPlaceholders["usesCleartextTraffic"] = false
+
+        buildConfigField("String", "SUPABASE_URL", quotedConfig("SUPABASE_URL"))
+        buildConfigField("String", "SUPABASE_ANON_KEY", quotedConfig("SUPABASE_ANON_KEY"))
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quotedConfig("GOOGLE_WEB_CLIENT_ID"))
+        buildConfigField("String", "BACKEND_BASE_URL", quotedConfig("BACKEND_BASE_URL", "https://api.example.invalid/"))
+        buildConfigField("String", "TRYONA_BASE_URL", quotedConfig("TRYONA_BASE_URL", "https://api.tryona.com/"))
+        buildConfigField("String", "TRYONA_API_KEY", quotedConfig("TRYONA_API_KEY"))
+        buildConfigField("String", "RAPID_API_KEY", quotedConfig("RAPID_API_KEY"))
+        buildConfigField("String", "RAPID_API_HOST", quotedConfig("RAPID_API_HOST", "try-on-diffusion.p.rapidapi.com"))
+        buildConfigField("String", "SAFEPAY_ENV", quotedConfig("SAFEPAY_ENV", "sandbox"))
+        buildConfigField("String", "SAFEPAY_PUBLIC_KEY", quotedConfig("SAFEPAY_PUBLIC_KEY"))
+        buildConfigField("String", "SAFEPAY_API_BASE_URL", quotedConfig("SAFEPAY_API_BASE_URL", "https://sandbox.api.getsafepay.com/"))
+        buildConfigField("String", "SAFEPAY_CHECKOUT_BASE_URL", quotedConfig("SAFEPAY_CHECKOUT_BASE_URL", "https://sandbox.api.getsafepay.com/checkout/pay"))
+        buildConfigField("boolean", "ENABLE_HTTP_LOGGING", "false")
 
         vectorDrawables {
             useSupportLibrary = true
@@ -26,7 +60,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["usesCleartextTraffic"] = true
+            buildConfigField("String", "BACKEND_BASE_URL", quotedConfig("DEBUG_BACKEND_BASE_URL", "http://10.0.2.2:3000/"))
+            buildConfigField("boolean", "ENABLE_HTTP_LOGGING", "true")
+        }
+
         release {
+            manifestPlaceholders["usesCleartextTraffic"] = false
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -49,6 +90,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
         compose = true
     }
@@ -58,6 +100,9 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -119,15 +164,6 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
 
-    // ARCore
-    implementation("com.google.ar:core:1.41.0")
-    implementation("com.google.ar.sceneform:core:1.17.1") {
-        exclude(group = "com.android.support")
-    }
-    implementation("com.google.ar.sceneform.ux:sceneform-ux:1.17.1") {
-        exclude(group = "com.android.support")
-    }
-
     // Room Database
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
@@ -180,14 +216,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
     implementation("androidx.camera:camera-extensions:$cameraxVersion")
-
-    // ML Kit and TensorFlow Lite for AI Try-On
-    implementation("com.google.mlkit:image-labeling:17.0.8")
-    implementation("com.google.mlkit:pose-detection:18.0.0-beta3")
-    implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta3")
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
 
     // Snap Camera Kit for Live AR Try-On
     val cameraKitVersion = "1.46.0"

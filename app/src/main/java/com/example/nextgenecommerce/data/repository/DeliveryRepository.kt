@@ -29,6 +29,12 @@ data class EarningsStats(
     val rating: Double = 0.0
 )
 
+data class RetailerStoreInfo(
+    val storeName: String = "",
+    val storeAddress: String = "",
+    val contactPhone: String = ""
+)
+
 @Singleton
 class DeliveryRepository @Inject constructor(
     private val supabaseAuth: Auth,
@@ -36,6 +42,8 @@ class DeliveryRepository @Inject constructor(
 ) {
     private fun uid() = supabaseAuth.currentUserOrNull()?.id
         ?: error("User not logged in")
+
+    fun getCurrentUserId(): String? = supabaseAuth.currentUserOrNull()?.id
 
     // ── Profile ────────────────────────────────────────────────────────────────
 
@@ -58,18 +66,20 @@ class DeliveryRepository @Inject constructor(
         companyName: String,
         contactPerson: String,
         address: String,
-        phone: String
+        phone: String,
+        verificationImages: List<String> = emptyList()
     ): Flow<Resource<DeliveryPartner>> = flow {
         emit(Resource.Loading())
         try {
             val userId = uid()
             supabaseDb.from("delivery_partners").insert(
                 DeliveryPartnerInsert(
-                    userId         = userId,
-                    companyName    = companyName,
-                    contactPerson  = contactPerson,
-                    companyAddress = address,
-                    contactPhone   = phone
+                    userId             = userId,
+                    companyName        = companyName,
+                    contactPerson      = contactPerson,
+                    companyAddress     = address,
+                    contactPhone       = phone,
+                    verificationImages = verificationImages
                 )
             )
             val created = supabaseDb.from("delivery_partners")
@@ -128,7 +138,7 @@ class DeliveryRepository @Inject constructor(
         emit(Resource.Loading())
         try {
             val rows = supabaseDb.from("orders")
-                .select(Columns.raw("*, order_items(*)")) {
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
                     filter {
                         eq("status", "READY_FOR_PICKUP")
                     }
@@ -147,7 +157,7 @@ class DeliveryRepository @Inject constructor(
         try {
             val userId = uid()
             val rows = supabaseDb.from("orders")
-                .select(Columns.raw("*, order_items(*)")) {
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
                     filter { eq("delivery_partner_id", userId) }
                 }
                 .decodeList<DeliveryOrderRow>()
@@ -247,7 +257,7 @@ class DeliveryRepository @Inject constructor(
         try {
             val userId = uid()
             val rows = supabaseDb.from("orders")
-                .select(Columns.raw("*, order_items(*)")) {
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
                     filter {
                         eq("delivery_partner_id", userId)
                         eq("status", "DELIVERED")
@@ -257,6 +267,155 @@ class DeliveryRepository @Inject constructor(
             emit(Resource.Success(rows.map { it.toOrder() }))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Failed to load history"))
+        }
+    }
+
+    // ── Return pickups ─────────────────────────────────────────────────────────
+
+    /** Retailer-approved returns waiting for a delivery partner to pick up from customer */
+    fun getAvailableReturnOrders(): Flow<Resource<List<Order>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val rows = supabaseDb.from("orders")
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
+                    filter { eq("status", "RETURN_APPROVED") }
+                }
+                .decodeList<DeliveryOrderRow>()
+            emit(Resource.Success(rows.map { it.toOrder() }))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to load return orders"))
+        }
+    }
+
+    /** Returns currently being transported by this delivery partner to the retailer */
+    fun getMyReturnOrders(): Flow<Resource<List<Order>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val userId = uid()
+            val rows = supabaseDb.from("orders")
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
+                    filter {
+                        eq("delivery_partner_id", userId)
+                        eq("status", "RETURN_IN_TRANSIT")
+                    }
+                }
+                .decodeList<DeliveryOrderRow>()
+            emit(Resource.Success(rows.map { it.toOrder() }))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to load in-transit returns"))
+        }
+    }
+
+    /** Partner accepts a return pickup — assigns themselves and marks RETURN_IN_TRANSIT */
+    fun acceptReturnPickup(orderId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            val userId = uid()
+            supabaseDb.from("orders").update(
+                AcceptOrderUpdate(deliveryPartnerId = userId, status = OrderStatus.RETURN_IN_TRANSIT.name)
+            ) { filter { eq("id", orderId) } }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to accept return pickup"))
+        }
+    }
+
+    /** Partner has delivered the returned item back to the retailer */
+    fun markReturnDeliveredToRetailer(orderId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            supabaseDb.from("orders").update(
+                DeliveryStatusUpdate(status = OrderStatus.RETURN_RECEIVED.name)
+            ) { filter { eq("id", orderId) } }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to mark return as delivered to retailer"))
+        }
+    }
+
+    // ── Admin ──────────────────────────────────────────────────────────────────
+
+    fun getAllDeliveryPartnersForAdmin(): Flow<Resource<List<DeliveryPartner>>> = flow {
+        emit(Resource.Loading())
+        try {
+            val partners = supabaseDb.from("delivery_partners")
+                .select()
+                .decodeList<DeliveryPartner>()
+            emit(Resource.Success(partners))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to load delivery partners"))
+        }
+    }
+
+    fun setDeliveryPartnerApproval(partnerId: String, approved: Boolean): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            if (approved) {
+                // Capture current active partners before revoking (for order reassignment)
+                val oldActive = supabaseDb.from("delivery_partners")
+                    .select { filter { eq("is_verified", true) } }
+                    .decodeList<DeliveryPartner>()
+                    .filter { it.id != partnerId }
+
+                // Get new partner's userId
+                val newPartner = supabaseDb.from("delivery_partners")
+                    .select { filter { eq("id", partnerId) }; limit(1) }
+                    .decodeList<DeliveryPartner>()
+                    .first()
+
+                // Auto-revoke all others back to PENDING (not REJECTED — admin didn't explicitly reject them)
+                supabaseDb.from("delivery_partners").update(
+                    VerifyUpdate(isVerified = false, isRejected = false)
+                ) { filter { neq("id", partnerId) } }
+
+                // Approve new partner
+                supabaseDb.from("delivery_partners").update(
+                    VerifyUpdate(isVerified = true, isRejected = false)
+                ) { filter { eq("id", partnerId) } }
+
+                // Reassign in-progress orders from old partners to new partner
+                oldActive.forEach { oldPartner ->
+                    supabaseDb.from("orders").update(
+                        PartnerReassignUpdate(deliveryPartnerId = newPartner.userId)
+                    ) {
+                        filter {
+                            eq("delivery_partner_id", oldPartner.userId)
+                            or {
+                                eq("status", "SHIPPED")
+                                eq("status", "OUT_FOR_DELIVERY")
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Explicit admin rejection
+                supabaseDb.from("delivery_partners").update(
+                    VerifyUpdate(isVerified = false, isRejected = true)
+                ) { filter { eq("id", partnerId) } }
+            }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to update delivery partner approval"))
+        }
+    }
+
+    /** Fetch store name / address / phone for a set of retailer IDs (for return card display) */
+    suspend fun getRetailerInfoBatch(retailerIds: Set<String>): Map<String, RetailerStoreInfo> {
+        if (retailerIds.isEmpty()) return emptyMap()
+        return try {
+            supabaseDb.from("retailers")
+                .select(Columns.raw("id, store_name, store_address, contact_phone"))
+                .decodeList<RetailerInfoRow>()
+                .filter { it.id in retailerIds }
+                .associate { row ->
+                    row.id to RetailerStoreInfo(
+                        storeName    = row.storeName,
+                        storeAddress = row.storeAddress ?: "",
+                        contactPhone = row.contactPhone ?: ""
+                    )
+                }
+        } catch (e: Exception) {
+            emptyMap()
         }
     }
 
@@ -270,11 +429,12 @@ class DeliveryRepository @Inject constructor(
 
 @Serializable
 private data class DeliveryPartnerInsert(
-    @SerialName("user_id")         val userId: String,
-    @SerialName("company_name")    val companyName: String,
-    @SerialName("contact_person")  val contactPerson: String,
-    @SerialName("company_address") val companyAddress: String,
-    @SerialName("contact_phone")   val contactPhone: String
+    @SerialName("user_id")              val userId: String,
+    @SerialName("company_name")         val companyName: String,
+    @SerialName("contact_person")       val contactPerson: String,
+    @SerialName("company_address")      val companyAddress: String,
+    @SerialName("contact_phone")        val contactPhone: String,
+    @SerialName("verification_images")  val verificationImages: List<String> = emptyList()
 )
 
 @Serializable
@@ -302,6 +462,39 @@ private data class DeliveryStatusUpdate(
 )
 
 @Serializable
+private data class VerifyUpdate(
+    @SerialName("is_verified") val isVerified: Boolean,
+    @SerialName("is_rejected") val isRejected: Boolean
+)
+
+@Serializable
+private data class PartnerReassignUpdate(
+    @SerialName("delivery_partner_id") val deliveryPartnerId: String
+)
+
+@Serializable
+private data class DeliveryAddressRow(
+    @SerialName("id")            val id: String = "",
+    @SerialName("user_id")       val userId: String = "",
+    @SerialName("label")         val label: String = "",
+    @SerialName("full_name")     val fullName: String = "",
+    @SerialName("phone")         val phone: String = "",
+    @SerialName("address_line1") val addressLine1: String = "",
+    @SerialName("address_line2") val addressLine2: String = "",
+    @SerialName("city")          val city: String = "",
+    @SerialName("province")      val province: String = "",
+    @SerialName("postal_code")   val postalCode: String = "",
+    @SerialName("country")       val country: String = "Pakistan",
+    @SerialName("is_default")    val isDefault: Boolean = false
+) {
+    fun toAddress() = com.example.nextgenecommerce.data.models.Address(
+        id = id, userId = userId, label = label, fullName = fullName,
+        phone = phone, addressLine1 = addressLine1, addressLine2 = addressLine2,
+        city = city, province = province, postalCode = postalCode, country = country
+    )
+}
+
+@Serializable
 private data class DeliveryOrderRow(
     @SerialName("id")                  val id: String = "",
     @SerialName("user_id")             val userId: String = "",
@@ -318,8 +511,7 @@ private data class DeliveryOrderRow(
     @SerialName("delivery_partner_id") val deliveryPartnerId: String? = null,
     @SerialName("created_at")          val createdAt: String = "",
     @SerialName("order_items")         val orderItems: List<DeliveryOrderItemRow> = emptyList(),
-    // Shipping address joined via shipping_address_id is complex — we embed essentials directly
-    @SerialName("shipping_address_snapshot") val shippingAddressSnapshot: String? = null
+    @SerialName("shipping_addresses")  val shippingAddress: DeliveryAddressRow? = null
 ) {
     fun toOrder() = Order(
         id                = id,
@@ -335,6 +527,7 @@ private data class DeliveryOrderRow(
         paymentMethod     = runCatching { PaymentMethod.valueOf(paymentMethod) }.getOrDefault(PaymentMethod.CASH_ON_DELIVERY),
         retailerId        = retailerId,
         deliveryPartnerId = deliveryPartnerId,
+        shippingAddress   = shippingAddress?.toAddress(),
         items             = orderItems.map {
             com.example.nextgenecommerce.data.models.OrderItem(
                 productId    = it.productId,
@@ -363,4 +556,12 @@ private data class DeliveryOrderItemRow(
     @SerialName("quantity")       val quantity: Int = 1,
     @SerialName("selected_size")  val selectedSize: String = "",
     @SerialName("selected_color") val selectedColor: String = ""
+)
+
+@Serializable
+private data class RetailerInfoRow(
+    @SerialName("id")            val id: String = "",
+    @SerialName("store_name")    val storeName: String = "",
+    @SerialName("store_address") val storeAddress: String? = null,
+    @SerialName("contact_phone") val contactPhone: String? = null
 )

@@ -25,6 +25,10 @@ data class Retailer(
     val rating: Double = 0.0,
     @SerialName("is_verified")
     val isVerified: Boolean = false,
+    @SerialName("is_rejected")
+    val isRejected: Boolean = false,
+    @SerialName("verification_images")
+    val verificationImages: List<String> = emptyList(),
     @SerialName("created_at")
     val createdAt: String = "",
     @SerialName("updated_at")
@@ -49,6 +53,12 @@ data class DeliveryPartner(
     val companyLogoUrl: String? = null,
     @SerialName("is_available")
     val isAvailable: Boolean = true,
+    @SerialName("is_verified")
+    val isVerified: Boolean = false,
+    @SerialName("is_rejected")
+    val isRejected: Boolean = false,
+    @SerialName("verification_images")
+    val verificationImages: List<String> = emptyList(),
     @SerialName("rating")
     val rating: Double = 0.0,
     @SerialName("total_deliveries")

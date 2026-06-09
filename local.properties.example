@@ -1,0 +1,18 @@
+sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+
+# Android app configuration.
+# Keep real values in local.properties or CI environment variables only.
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+GOOGLE_WEB_CLIENT_ID=
+SNAP_CAMERA_KIT_API_TOKEN=
+BACKEND_BASE_URL=https://your-production-api.example.com/
+DEBUG_BACKEND_BASE_URL=http://10.0.2.2:3000/
+TRYONA_BASE_URL=https://api.tryona.com/
+TRYONA_API_KEY=
+RAPID_API_KEY=
+RAPID_API_HOST=try-on-diffusion.p.rapidapi.com
+SAFEPAY_ENV=sandbox
+SAFEPAY_PUBLIC_KEY=
+SAFEPAY_API_BASE_URL=https://sandbox.api.getsafepay.com/
+SAFEPAY_CHECKOUT_BASE_URL=https://sandbox.api.getsafepay.com/checkout/pay

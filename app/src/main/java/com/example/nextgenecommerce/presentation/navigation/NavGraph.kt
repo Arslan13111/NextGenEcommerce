@@ -37,6 +37,7 @@ import com.example.nextgenecommerce.presentation.screens.wishlist.WishlistScreen
 import com.example.nextgenecommerce.presentation.screens.admin.AdminLoginScreen
 import com.example.nextgenecommerce.presentation.screens.admin.AdminDashboardScreen
 import com.example.nextgenecommerce.presentation.screens.admin.AddProductScreen
+import com.example.nextgenecommerce.presentation.screens.admin.AdminRetailerProductsScreen
 import com.example.nextgenecommerce.presentation.screens.admin.RevenueDetailScreen
 import com.example.nextgenecommerce.presentation.screens.admin.SalesDetailScreen
 import com.example.nextgenecommerce.presentation.screens.retailer.RetailerDashboardScreen
@@ -183,12 +184,28 @@ fun NavGraph(
             com.example.nextgenecommerce.presentation.screens.profile.DiscountCardScreen(navController = navController)
         }
 
+        composable(Screen.Vault.route) {
+            com.example.nextgenecommerce.presentation.screens.profile.VaultScreen(navController = navController)
+        }
+
         composable(Screen.HelpCenter.route) {
             com.example.nextgenecommerce.presentation.screens.settings.HelpCenterScreen(navController = navController)
         }
 
         composable(Screen.About.route) {
             com.example.nextgenecommerce.presentation.screens.settings.AboutScreen(navController = navController)
+        }
+
+        composable(Screen.PrivacyPolicy.route) {
+            com.example.nextgenecommerce.presentation.screens.settings.PrivacyPolicyScreen(navController = navController)
+        }
+
+        composable(Screen.TermsConditions.route) {
+            com.example.nextgenecommerce.presentation.screens.settings.TermsConditionsScreen(navController = navController)
+        }
+
+        composable(Screen.DataPreferences.route) {
+            com.example.nextgenecommerce.presentation.screens.settings.DataPreferencesScreen(navController = navController)
         }
 
         // Try-On Screen
@@ -258,6 +275,22 @@ fun NavGraph(
 
         composable(Screen.SalesDetail.route) {
             SalesDetailScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.AdminRetailerProducts.route,
+            arguments = listOf(
+                navArgument("retailerId") { type = NavType.StringType },
+                navArgument("storeName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val retailerId = backStackEntry.arguments?.getString("retailerId") ?: ""
+            val storeName  = backStackEntry.arguments?.getString("storeName") ?: ""
+            AdminRetailerProductsScreen(
+                navController = navController,
+                retailerId    = retailerId,
+                storeName     = storeName
+            )
         }
 
         composable(

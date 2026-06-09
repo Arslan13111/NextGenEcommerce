@@ -51,15 +51,18 @@ enum class OrderStatus {
     PENDING,
     CONFIRMED,
     PROCESSING,
-    PACKED,             // retailer packed the item
-    READY_FOR_PICKUP,   // waiting for delivery partner to accept
+    PACKED,               // retailer packed the item
+    READY_FOR_PICKUP,     // waiting for delivery partner to accept
     SHIPPED,
     OUT_FOR_DELIVERY,
     DELIVERED,
     CANCELLED,
-    RETURN_REQUESTED,
-    RETURNED,
-    RETURN_REJECTED
+    RETURN_REQUESTED,     // customer submitted return with image
+    RETURN_APPROVED,      // retailer approved, awaiting delivery pickup from customer
+    RETURN_IN_TRANSIT,    // delivery partner picked up from customer, en route to retailer
+    RETURN_RECEIVED,      // delivery partner delivered to retailer, awaiting final verify
+    RETURNED,             // retailer verified + refund processed
+    RETURN_REJECTED       // retailer rejected the return request
 }
 
 enum class PaymentStatus {
@@ -73,7 +76,8 @@ enum class PaymentMethod {
     EASYPAISA,
     JAZZCASH,
     CASH_ON_DELIVERY,
-    SAFEPAY
+    SAFEPAY,
+    VAULT
 }
 
 data class OrderTracking(

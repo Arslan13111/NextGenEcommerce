@@ -18,7 +18,7 @@ import com.example.nextgenecommerce.data.models.*
         NotificationEntity::class,
         AddressEntity::class
     ],
-    version = 15,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

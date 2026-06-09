@@ -2,115 +2,118 @@ package com.example.nextgenecommerce.presentation.screens.tryon
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.net.Uri
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Log
-import android.widget.VideoView
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.*
+import android.view.Surface
+import android.widget.Toast
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FlipCameraAndroid
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import coil.compose.AsyncImage
+import androidx.exifinterface.media.ExifInterface
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 @Composable
 fun LiveCameraTryOnView(
     productImageUrl: String,
+    onPhotoCaptured: (Bitmap) -> Unit,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    var isCapturing by remember { mutableStateOf(false) }
-    var isFrontCamera by remember { mutableStateOf(true) }
-    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
-    var selectedMediaIsVideo by remember { mutableStateOf(false) }
-
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val mimeType = context.contentResolver.getType(uri) ?: ""
-            selectedMediaIsVideo = mimeType.startsWith("video/")
-            selectedMediaUri = uri
+    val previewView = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
-
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
+
+    var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var isCapturing by remember { mutableStateOf(false) }
+    var isFrontCamera by remember { mutableStateOf(true) }
 
     DisposableEffect(Unit) {
         onDispose {
+            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
             cameraExecutor.shutdown()
         }
     }
 
-    // Camera binding effect
-    val previewView = remember { PreviewView(context) }
-
-    LaunchedEffect(isFrontCamera) {
+    LaunchedEffect(isFrontCamera, productImageUrl) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-
         cameraProviderFuture.addListener({
             try {
                 val cameraProvider = cameraProviderFuture.get()
-
                 val preview = Preview.Builder()
                     .build()
-                    .also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
-
-                val imageAnalyzer = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                val capture = ImageCapture.Builder()
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setTargetRotation(previewView.display?.rotation ?: Surface.ROTATION_0)
                     .build()
-                    .also { analysis ->
-                        analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                            // Process frame for AR try-on
-                            // TODO: Implement real-time AR processing
-                            processFrameForTryOn(imageProxy, productImageUrl)
-                            imageProxy.close()
-                        }
-                    }
-
                 val cameraSelector = if (isFrontCamera) {
                     CameraSelector.DEFAULT_FRONT_CAMERA
                 } else {
                     CameraSelector.DEFAULT_BACK_CAMERA
                 }
 
-                try {
-                    cameraProvider.unbindAll()
-                    cameraProvider.bindToLifecycle(
-                        lifecycleOwner,
-                        cameraSelector,
-                        preview,
-                        imageAnalyzer
-                    )
-                } catch (exc: Exception) {
-                    Log.e("CameraX", "Use case binding failed", exc)
-                }
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    capture
+                )
+                imageCapture = capture
             } catch (exc: Exception) {
-                Log.e("CameraX", "Camera provider initialization failed", exc)
+                Log.e("TryOnCamera", "Camera binding failed", exc)
+                Toast.makeText(context, "Unable to start camera.", Toast.LENGTH_SHORT).show()
             }
         }, ContextCompat.getMainExecutor(context))
     }
@@ -120,50 +123,19 @@ fun LiveCameraTryOnView(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Camera Preview (hidden when gallery media is selected)
-        if (selectedMediaUri == null) {
-            AndroidView(
-                factory = { previewView },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        AndroidView(
+            factory = { previewView },
+            modifier = Modifier.fillMaxSize()
+        )
 
-        // Gallery media display
-        selectedMediaUri?.let { uri ->
-            if (selectedMediaIsVideo) {
-                AndroidView(
-                    factory = { ctx ->
-                        VideoView(ctx).apply {
-                            setVideoURI(uri)
-                            setOnPreparedListener { mp ->
-                                mp.isLooping = true
-                                start()
-                            }
-                        }
-                    },
-                    update = { videoView ->
-                        if (!videoView.isPlaying) videoView.start()
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                AsyncImage(
-                    model = uri,
-                    contentDescription = "Selected photo",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        // Overlay UI
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(20.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -172,191 +144,174 @@ fun LiveCameraTryOnView(
                 IconButton(
                     onClick = onClose,
                     modifier = Modifier
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            CircleShape
-                        )
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.55f), CircleShape)
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = "Close camera",
                         tint = Color.White
                     )
                 }
 
                 Text(
-                    text = "Live Try-On",
+                    text = "Take Your Photo",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     ),
                     modifier = Modifier
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            MaterialTheme.shapes.small
-                        )
+                        .background(Color.Black.copy(alpha = 0.55f), MaterialTheme.shapes.small)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
 
-                if (selectedMediaUri != null) {
-                    IconButton(
-                        onClick = { selectedMediaUri = null },
-                        modifier = Modifier
-                            .background(
-                                Color.Black.copy(alpha = 0.5f),
-                                CircleShape
-                            )
-                    ) {
-                        Icon(
-                            Icons.Default.Videocam,
-                            contentDescription = "Back to Camera",
-                            tint = Color.White
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.size(48.dp))
-                }
+                Spacer(modifier = Modifier.size(48.dp))
             }
 
-            // Bottom Bar with Controls
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // Info text
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = Color.Black.copy(alpha = 0.7f)
+                        containerColor = Color.Black.copy(alpha = 0.72f)
                     ),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Text(
-                        text = if (selectedMediaUri != null) {
-                            if (selectedMediaIsVideo) "Video loaded — tap camera icon to go back to live view"
-                            else "Photo loaded — tap camera icon to go back to live view"
-                        } else {
-                            "Position yourself in the frame or tap the gallery icon to load a photo/video"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Make sure your full body is in frame to try this product. Do not take only a face photo.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = Color.White,
-                        modifier = Modifier.padding(12.dp)
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
                     )
                 }
 
-                // Control Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left group: Flip Camera + Gallery
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    IconButton(
+                        onClick = { isFrontCamera = !isFrontCamera },
+                        enabled = !isCapturing,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(Color.White, CircleShape)
                     ) {
-                        // Flip Camera Button (disabled in gallery mode)
-                        IconButton(
-                            onClick = { isFrontCamera = !isFrontCamera },
-                            enabled = selectedMediaUri == null,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .background(
-                                    if (selectedMediaUri == null) Color.White
-                                    else Color.White.copy(alpha = 0.3f),
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(
-                                Icons.Default.FlipCameraAndroid,
-                                contentDescription = "Flip Camera",
-                                tint = if (selectedMediaUri == null) Color.Black else Color.Gray,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-
-                        // Gallery Button
-                        IconButton(
-                            onClick = { galleryLauncher.launch("*/*") },
-                            modifier = Modifier
-                                .size(52.dp)
-                                .background(
-                                    Color.Black.copy(alpha = 0.5f),
-                                    CircleShape
-                                )
-                        ) {
-                            Icon(
-                                Icons.Default.PhotoLibrary,
-                                contentDescription = "Open Gallery",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        Icon(
+                            Icons.Default.FlipCameraAndroid,
+                            contentDescription = "Flip camera",
+                            tint = Color.Black,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
 
-                    // Capture Button - Center (disabled in gallery mode)
                     IconButton(
                         onClick = {
-                            if (selectedMediaUri == null) {
-                                isCapturing = true
-                                // TODO: Capture photo
-                            }
+                            val capture = imageCapture ?: return@IconButton
+                            isCapturing = true
+                            captureAvatarPhoto(
+                                context = context,
+                                imageCapture = capture,
+                                cameraExecutor = cameraExecutor,
+                                onSuccess = { bitmap ->
+                                    isCapturing = false
+                                    onPhotoCaptured(bitmap)
+                                },
+                                onError = { message, error ->
+                                    isCapturing = false
+                                    Log.e("TryOnCamera", message, error)
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         },
+                        enabled = !isCapturing && imageCapture != null,
                         modifier = Modifier
-                            .size(72.dp)
-                            .background(
-                                if (selectedMediaUri == null) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-                                CircleShape
-                            ),
-                        enabled = !isCapturing && selectedMediaUri == null
+                            .size(76.dp)
+                            .background(MaterialTheme.colorScheme.primary, CircleShape)
                     ) {
                         if (isCapturing) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(34.dp),
                                 color = Color.White,
                                 strokeWidth = 3.dp
                             )
                         } else {
                             Icon(
                                 Icons.Default.CameraAlt,
-                                contentDescription = "Capture",
+                                contentDescription = "Take photo",
                                 tint = Color.White,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(34.dp)
                             )
                         }
                     }
 
-                    // Right spacer to keep capture button visually centred
-                    Spacer(modifier = Modifier.size(114.dp))
+                    Spacer(modifier = Modifier.size(56.dp))
                 }
             }
         }
     }
 }
 
-@androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun processFrameForTryOn(imageProxy: ImageProxy, productImageUrl: String) {
-    // TODO: Implement real-time AR processing
-    // This would:
-    // 1. Detect person/pose using ML Kit
-    // 2. Overlay product image
-    // 3. Apply transformations to match body/face
-    // 4. Return processed frame
+private fun captureAvatarPhoto(
+    context: Context,
+    imageCapture: ImageCapture,
+    cameraExecutor: ExecutorService,
+    onSuccess: (Bitmap) -> Unit,
+    onError: (String, Throwable?) -> Unit
+) {
+    val photoFile = File(context.cacheDir, "try_on_avatar_${System.currentTimeMillis()}.jpg")
+    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
-    val mediaImage = imageProxy.image
-    if (mediaImage != null) {
-        // Process the image here
-        // For now, just log
-        Log.d("TryOn", "Processing frame for try-on")
-    }
+    imageCapture.takePicture(
+        outputOptions,
+        cameraExecutor,
+        object : ImageCapture.OnImageSavedCallback {
+            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                val bitmap = decodeCapturedBitmap(photoFile)
+                photoFile.delete()
+
+                if (bitmap == null) {
+                    ContextCompat.getMainExecutor(context).execute {
+                        onError("Unable to read captured photo.", null)
+                    }
+                    return
+                }
+
+                ContextCompat.getMainExecutor(context).execute {
+                    onSuccess(bitmap)
+                }
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                photoFile.delete()
+                ContextCompat.getMainExecutor(context).execute {
+                    onError("Failed to capture photo. Please try again.", exception)
+                }
+            }
+        }
+    )
 }
 
-private suspend fun Context.getCameraProvider(): ProcessCameraProvider =
-    suspendCoroutine { continuation ->
-        ProcessCameraProvider.getInstance(this).also { cameraProvider ->
-            cameraProvider.addListener({
-                continuation.resume(cameraProvider.get())
-            }, ContextCompat.getMainExecutor(this))
-        }
+private fun decodeCapturedBitmap(file: File): Bitmap? {
+    val decoded = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+    val exif = runCatching { ExifInterface(file.absolutePath) }.getOrNull()
+    val rotation = when (exif?.getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL
+    )) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
     }
+
+    if (rotation == 0f) return decoded
+
+    val matrix = Matrix().apply { postRotate(rotation) }
+    return Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true).also {
+        if (it != decoded) decoded.recycle()
+    }
+}

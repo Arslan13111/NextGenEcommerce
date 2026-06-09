@@ -2,6 +2,7 @@ package com.example.nextgenecommerce.presentation.screens.tryon
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -41,11 +43,8 @@ import com.example.nextgenecommerce.presentation.components.PrimaryButton
 import com.example.nextgenecommerce.presentation.components.SecondaryButton
 import com.example.nextgenecommerce.presentation.viewmodel.ProductViewModel
 import com.example.nextgenecommerce.viewmodel.TryOnViewModel
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TryOnScreen(
     navController: NavController,
@@ -63,7 +62,19 @@ fun TryOnScreen(
     var showCameraView by remember { mutableStateOf(false) }
     var showAvatarSourceDialog by remember { mutableStateOf(false) }
 
-    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            showCameraView = true
+        } else {
+            Toast.makeText(
+                context,
+                "Camera permission is required to take your photo.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     LaunchedEffect(productId) {
         productViewModel.getProductById(productId)
@@ -109,10 +120,15 @@ fun TryOnScreen(
                     TextButton(
                         onClick = {
                             showAvatarSourceDialog = false
-                            if (cameraPermissionState.status.isGranted) {
+                            val hasCameraPermission = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (hasCameraPermission) {
                                 showCameraView = true
                             } else {
-                                cameraPermissionState.launchPermissionRequest()
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -204,6 +220,10 @@ fun TryOnScreen(
         if (showCameraView) {
             LiveCameraTryOnView(
                 productImageUrl = product?.images?.getOrElse(imageIndex) { product?.images?.firstOrNull() } ?: "",
+                onPhotoCaptured = { bitmap ->
+                    tryOnViewModel.setAvatarFromBitmap(bitmap)
+                    showCameraView = false
+                },
                 onClose = { showCameraView = false }
             )
         } else {
@@ -475,7 +495,7 @@ private fun AvatarPreviewSection(
         }
 
         PrimaryButton(
-            text = "Try On This Product",
+            text = "Try On This Image",
             onClick = onTryOn,
             modifier = Modifier.fillMaxWidth()
         )

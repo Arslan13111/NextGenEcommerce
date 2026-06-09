@@ -37,6 +37,7 @@ import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.AddressViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.OrderViewModel
+import com.example.nextgenecommerce.presentation.viewmodel.WalletViewModel
 import com.example.nextgenecommerce.util.CardTierUtil
 import com.example.nextgenecommerce.util.ColorUtils
 import com.example.nextgenecommerce.util.Resource
@@ -47,19 +48,25 @@ fun CheckoutScreen(
     navController: NavController,
     cartViewModel: CartViewModel,
     addressViewModel: AddressViewModel = hiltViewModel(),
-    orderViewModel: OrderViewModel = hiltViewModel()
+    orderViewModel: OrderViewModel = hiltViewModel(),
+    walletViewModel: WalletViewModel = hiltViewModel()
 ) {
     val cartItems        by cartViewModel.checkoutItems.collectAsState()
     val addresses        by addressViewModel.addresses.collectAsState()
     val createOrderState by orderViewModel.createOrderState.collectAsState()
     val userTier         by orderViewModel.userTier.collectAsState()
+    val vaultBalanceState by walletViewModel.balance.collectAsState()
+    val vaultBalance = (vaultBalanceState as? Resource.Success)?.data ?: 0.0
 
-    var selectedAddress   by remember { mutableStateOf<Address?>(null) }
-    var showAddressSheet  by remember { mutableStateOf(false) }
-    var comment           by remember { mutableStateOf("") }
-    var orderError        by remember { mutableStateOf("") }
-    var applyCardDiscount by remember { mutableStateOf(true) }
-    var selectedDelivery  by remember { mutableStateOf(DeliveryType.STANDARD) }
+    var selectedAddress    by remember { mutableStateOf<Address?>(null) }
+    var showAddressSheet   by remember { mutableStateOf(false) }
+    var comment            by remember { mutableStateOf("") }
+    var orderError         by remember { mutableStateOf("") }
+    var applyCardDiscount  by remember { mutableStateOf(true) }
+    var selectedDelivery   by remember { mutableStateOf(DeliveryType.STANDARD) }
+    var selectedPayment    by remember { mutableStateOf(PaymentMethod.CASH_ON_DELIVERY) }
+    // Tracks which payment method was used when the order was submitted
+    var pendingPaymentMethod by remember { mutableStateOf(PaymentMethod.CASH_ON_DELIVERY) }
 
     val subtotal = cartItems.sumOf { it.price * it.quantity }
     val tax = subtotal * 0.08
@@ -67,6 +74,11 @@ fun CheckoutScreen(
     val discountAmount = if (applyCardDiscount) CardTierUtil.computeDiscount(subtotal, userTier) else 0.0
     val grandTotal = (subtotal + tax + shipping - discountAmount).coerceAtLeast(0.0)
     val isProcessing = createOrderState is Resource.Loading
+
+    // Ensure addresses are loaded with the current authenticated user every time this screen opens
+    LaunchedEffect(Unit) {
+        addressViewModel.refreshAddresses()
+    }
 
     LaunchedEffect(addresses) {
         if (selectedAddress == null) {
@@ -79,9 +91,19 @@ fun CheckoutScreen(
             is Resource.Success -> {
                 orderViewModel.resetCreateOrderState()
                 val orderId = state.data?.id ?: ""
-                cartViewModel.removeCheckoutItemsFromCart()
-                navController.navigate("order_success/$orderId") {
-                    popUpTo(Screen.Cart.route) { inclusive = true }
+                if (pendingPaymentMethod == PaymentMethod.SAFEPAY) {
+                    // Navigate to Safepay WebView — cart is cleared after successful payment
+                    navController.navigate(
+                        Screen.SafepayCheckout.createRoute(orderId, grandTotal.toInt().toString())
+                    ) {
+                        popUpTo(Screen.Cart.route) { inclusive = false }
+                    }
+                } else {
+                    // COD / Vault — clear cart and go to success
+                    cartViewModel.removeCheckoutItemsFromCart()
+                    navController.navigate("order_success/$orderId") {
+                        popUpTo(Screen.Cart.route) { inclusive = true }
+                    }
                 }
             }
             is Resource.Error -> {
@@ -221,11 +243,12 @@ fun CheckoutScreen(
                     )
                 }
 
-                // Confirm order button
+                // ── Place order / Proceed to pay button ──────────────────────
                 Button(
                     onClick = {
                         orderError = ""
                         val address = selectedAddress ?: return@Button
+                        pendingPaymentMethod = selectedPayment
                         orderViewModel.createOrder(
                             CreateOrderRequest(
                                 userId = "",
@@ -242,7 +265,7 @@ fun CheckoutScreen(
                                     )
                                 },
                                 shippingAddress = address,
-                                paymentMethod = PaymentMethod.CASH_ON_DELIVERY.name,
+                                paymentMethod = selectedPayment.name,
                                 discountAmount = discountAmount,
                                 cardTier = userTier.name
                             )
@@ -252,14 +275,28 @@ fun CheckoutScreen(
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
+                        containerColor = when (selectedPayment) {
+                            PaymentMethod.SAFEPAY -> Color(0xFF00C853)
+                            PaymentMethod.VAULT   -> Color(0xFF1A237E)
+                            else                  -> Color.White
+                        },
                         disabledContainerColor = Color.White.copy(alpha = 0.3f)
                     )
                 ) {
                     if (isProcessing) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
-                    } else {
-                        Text("Confirm order", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    } else when (selectedPayment) {
+                        PaymentMethod.SAFEPAY -> {
+                            Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Proceed to Pay · PKR ${grandTotal.toInt()}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        PaymentMethod.VAULT -> {
+                            Icon(Icons.Default.AccountBalanceWallet, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Pay from Vault · PKR ${grandTotal.toInt()}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        else -> Text("Confirm Order", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
             }
@@ -273,13 +310,12 @@ fun CheckoutScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            // ── Payment method ─────────────────────────────────────────────────
-            Row(
+            // ── Payment method selector ────────────────────────────────────────
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     "Payment method",
@@ -287,15 +323,177 @@ fun CheckoutScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.Payments, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Cash on delivery", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // ── Cash on Delivery option ────────────────────────────────
+                    val isCodSelected = selectedPayment == PaymentMethod.CASH_ON_DELIVERY
+                    val codBg by animateColorAsState(
+                        targetValue = if (isCodSelected) Color(0xFF111111) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        animationSpec = tween(200), label = "codBg"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(codBg)
+                            .clickable { selectedPayment = PaymentMethod.CASH_ON_DELIVERY }
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isCodSelected) Color.White.copy(alpha = 0.15f)
+                                    else MaterialTheme.colorScheme.surface
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Money, null,
+                                tint = if (isCodSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                "Cash",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isCodSelected) Color.White else MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                "on delivery",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isCodSelected) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isCodSelected) {
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    // ── Safepay option ─────────────────────────────────────────
+                    val isSafepaySelected = selectedPayment == PaymentMethod.SAFEPAY
+                    val safepayBg by animateColorAsState(
+                        targetValue = if (isSafepaySelected) Color(0xFF006837) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        animationSpec = tween(200), label = "safepayBg"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(safepayBg)
+                            .clickable { selectedPayment = PaymentMethod.SAFEPAY }
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isSafepaySelected) Color.White.copy(alpha = 0.15f)
+                                    else MaterialTheme.colorScheme.surface
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Lock, null,
+                                tint = if (isSafepaySelected) Color.White else Color(0xFF00C853),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                "Safepay",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isSafepaySelected) Color.White else MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                "Card / Wallet",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSafepaySelected) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isSafepaySelected) {
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+
+                // ── Vault option ───────────────────────────────────────────────
+                val isVaultSelected = selectedPayment == PaymentMethod.VAULT
+                val hasEnoughBalance = vaultBalance >= grandTotal
+                val vaultBg by animateColorAsState(
+                    targetValue = when {
+                        isVaultSelected -> Color(0xFF1A237E)
+                        !hasEnoughBalance -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    },
+                    animationSpec = tween(200), label = "vaultBg"
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(vaultBg)
+                        .clickable(enabled = hasEnoughBalance) { selectedPayment = PaymentMethod.VAULT }
+                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                when {
+                                    isVaultSelected -> Color.White.copy(alpha = 0.15f)
+                                    else -> MaterialTheme.colorScheme.surface
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.AccountBalanceWallet, null,
+                            tint = when {
+                                isVaultSelected -> Color.White
+                                !hasEnoughBalance -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                else -> Color(0xFF3949AB)
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            "My Vault",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = when {
+                                isVaultSelected -> Color.White
+                                !hasEnoughBalance -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                                else -> MaterialTheme.colorScheme.onBackground
+                            }
+                        )
+                        Text(
+                            if (hasEnoughBalance) "Balance: PKR ${vaultBalance.toInt()}"
+                            else "Balance PKR ${vaultBalance.toInt()} — insufficient",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when {
+                                isVaultSelected -> Color.White.copy(alpha = 0.7f)
+                                !hasEnoughBalance -> Color(0xFFEF5350).copy(alpha = 0.8f)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                    if (isVaultSelected) {
+                        Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
                 }
             }
 
@@ -305,7 +503,6 @@ fun CheckoutScreen(
             DiscountCardSection(
                 tier = userTier,
                 discountAmount = discountAmount,
-                subtotal = subtotal,
                 applyDiscount = applyCardDiscount,
                 onToggle = { applyCardDiscount = it }
             )
@@ -582,7 +779,6 @@ private fun DeliveryTypeSection(
 private fun DiscountCardSection(
     tier: CardTierUtil.CardTier,
     discountAmount: Double,
-    subtotal: Double,
     applyDiscount: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
@@ -651,7 +847,7 @@ private fun DiscountCardSection(
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = Color(0xFF111111),
+                    checkedTrackColor = switchTrack,
                     uncheckedThumbColor = Color.White,
                     uncheckedTrackColor = MaterialTheme.colorScheme.outline
                 )

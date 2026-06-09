@@ -37,6 +37,7 @@ data class ProductEntity(
     val tags: List<String> = emptyList(),
     val brand: String = "",
     val retailerId: String? = null,
+    val retailerIds: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
@@ -66,6 +67,7 @@ data class ProductEntity(
             tags = tags,
             brand = brand,
             retailerId = retailerId,
+            retailerIds = retailerIds,
             createdAt = createdAt,
             updatedAt = System.currentTimeMillis()
         )
@@ -214,7 +216,10 @@ data class NotificationEntity(
     val productId: String? = null,
     val orderId: String? = null,
     val imageUrl: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val supabaseId: String? = null,
+    val userId: String = "",
+    val isDeleted: Boolean = false
 )
 
 enum class NotificationType {
@@ -269,6 +274,8 @@ data class SupabaseProduct(
     val brand: String = "",
     @SerialName("retailer_id")
     val retailerId: String? = null,
+    @SerialName("retailer_ids")
+    val retailerIds: List<String> = emptyList(),
     @SerialName("created_at")
     val createdAt: Long = System.currentTimeMillis(),
     @SerialName("updated_at")
@@ -311,6 +318,7 @@ data class SupabaseProduct(
             tags = tags,
             brand = brand,
             retailerId = retailerId,
+            retailerIds = retailerIds,
             createdAt = createdAt,
             updatedAt = updatedAt
         )

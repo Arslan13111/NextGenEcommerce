@@ -65,7 +65,11 @@ sealed class Screen(val route: String) {
     object ChangePassword : Screen("change_password")
     object HelpCenter : Screen("help_center")
     object About : Screen("about")
+    object PrivacyPolicy : Screen("privacy_policy")
+    object TermsConditions : Screen("terms_conditions")
+    object DataPreferences : Screen("data_preferences")
     object DiscountCard : Screen("discount_card")
+    object Vault : Screen("vault")
 
     // Payment
     object SafepayCheckout : Screen("safepay_checkout/{orderId}/{amount}") {
@@ -88,6 +92,11 @@ sealed class Screen(val route: String) {
         } else {
             "add_product"
         }
+    }
+
+    object AdminRetailerProducts : Screen("admin_retailer_products/{retailerId}/{storeName}") {
+        fun createRoute(retailerId: String, storeName: String) =
+            "admin_retailer_products/$retailerId/${storeName.replace("/", "_")}"
     }
 
     // Retailer

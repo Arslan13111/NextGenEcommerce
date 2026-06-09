@@ -38,6 +38,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.nextgenecommerce.R
 import com.example.nextgenecommerce.data.models.ProductEntity
+import com.example.nextgenecommerce.presentation.components.ProductSyncEffect
 import com.example.nextgenecommerce.presentation.navigation.Screen
 import com.example.nextgenecommerce.presentation.viewmodel.CartViewModel
 import com.example.nextgenecommerce.presentation.viewmodel.NotificationViewModel
@@ -56,6 +57,8 @@ fun HomeScreen(
     val allProducts by productViewModel.allProducts.collectAsStateWithLifecycle()
     val wishlistItems by wishlistViewModel.wishlistItems.collectAsStateWithLifecycle()
     val unreadNotificationCount by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
+
+    ProductSyncEffect(productViewModel)
 
     // Only show spinner on first load — never flash back to spinner during background sync
     var hasLoadedOnce by remember { mutableStateOf(false) }
@@ -113,11 +116,12 @@ fun HomeScreen(
                 },
                 actions = {
                     BadgedBox(
+                        modifier = Modifier.padding(top = 6.dp, end = 12.dp),
                         badge = {
                             if (unreadNotificationCount > 0) {
                                 Badge(containerColor = MaterialTheme.colorScheme.error) {
                                     Text(
-                                        "$unreadNotificationCount",
+                                        if (unreadNotificationCount > 99) "99+" else "$unreadNotificationCount",
                                         color = Color.White,
                                         fontSize = 8.sp
                                     )

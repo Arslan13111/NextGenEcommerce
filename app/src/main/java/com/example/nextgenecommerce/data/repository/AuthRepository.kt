@@ -3,6 +3,7 @@ package com.example.nextgenecommerce.data.repository
 import android.util.Log
 import com.example.nextgenecommerce.data.models.AdminConfig
 import com.example.nextgenecommerce.data.models.User
+import com.example.nextgenecommerce.data.remote.ApiService
 import com.example.nextgenecommerce.util.Resource
 import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.gotrue.providers.Google
@@ -11,6 +12,8 @@ import io.github.jan.supabase.gotrue.providers.builtin.IDToken
 import io.github.jan.supabase.gotrue.user.UserInfo
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.put
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +26,10 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepository @Inject constructor(
     private val supabaseAuth: Auth,
-    private val supabaseDb: Postgrest
+    private val supabaseDb: Postgrest,
+    private val apiService: ApiService
 ) {
-    // Shared user state — all ViewModels observe this single source of truth
+    // Shared user state: all ViewModels observe this single source of truth.
     private val _sharedUser = MutableStateFlow<User?>(null)
     val sharedUser: StateFlow<User?> = _sharedUser.asStateFlow()
 
@@ -33,11 +37,11 @@ class AuthRepository @Inject constructor(
         _sharedUser.value = user
     }
 
-    // Shared admin state — lives in the singleton so it survives screen navigation
+    // Shared admin state lives in the singleton so it survives screen navigation.
     private val _isAdmin = MutableStateFlow(false)
     val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
 
-    // True once adminLogin() has confirmed admin — blocks background checks from overwriting
+    // True once adminLogin() has confirmed admin; blocks background checks from overwriting it.
     private var adminVerifiedByLogin = false
 
     fun setAdminVerified(verified: Boolean) {
@@ -58,9 +62,7 @@ class AuthRepository @Inject constructor(
 
     /**
      * Check if the currently logged-in user is an admin.
-     * Returns true if:
-     * 1. User has role = 'admin' in users table
-     * 2. OR user ID matches the hardcoded admin UID
+     * Admin access comes only from the users.role value in Supabase.
      */
     suspend fun isCurrentUserAdmin(): Flow<Resource<Boolean>> = flow {
         emit(Resource.Loading())
@@ -69,13 +71,6 @@ class AuthRepository @Inject constructor(
                 ?: throw Exception("No user logged in")
 
             val userId = currentUser.id
-
-            // Check if user ID matches hardcoded admin ID
-            if (userId == AdminConfig.ADMIN_USER_ID) {
-                Log.d(TAG, "User $userId is admin (matched hardcoded ID)")
-                emit(Resource.Success(true))
-                return@flow
-            }
 
             // Check role in users table
             val userData = supabaseDb.from("users")
@@ -86,7 +81,7 @@ class AuthRepository @Inject constructor(
                 }
                 .decodeSingleOrNull<User>()
 
-            val isAdmin = userData?.role?.equals("admin", ignoreCase = true) == true
+            val isAdmin = userData?.role?.equals(AdminConfig.ADMIN_ROLE, ignoreCase = true) == true
             Log.d(TAG, "User $userId admin check: role=${userData?.role}, isAdmin=$isAdmin")
             emit(Resource.Success(isAdmin))
         } catch (e: Exception) {
@@ -111,7 +106,7 @@ class AuthRepository @Inject constructor(
             val userId = supabaseAuth.currentUserOrNull()?.id
                 ?: throw Exception("Login failed")
 
-            // Fetch the user row — if it fails, try email-only fallback
+            // Fetch the user row; admin access must come from the profile role.
             val userData = try {
                 supabaseDb.from("users")
                     .select(columns = Columns.ALL) {
@@ -119,19 +114,15 @@ class AuthRepository @Inject constructor(
                     }
                     .decodeSingle<User>()
             } catch (e: Exception) {
-                Log.w(TAG, "Could not fetch user from DB, using email fallback. Error: ${e.message}")
-                // Create a synthetic user — email-based check in isAdmin() will still work
-                User(id = userId, email = email, role = AdminConfig.ADMIN_ROLE)
+                Log.w(TAG, "Could not fetch admin profile. Error: ${e.message}")
+                throw Exception("Admin profile not found")
             }
 
-            Log.d(TAG, "Admin login check — id=$userId email=${userData.email} role=${userData.role} isAdmin=${userData.isAdmin()}")
+            Log.d(TAG, "Admin login check: id=$userId role=${userData.role} isAdmin=${userData.isAdmin()}")
 
             if (!userData.isAdmin()) {
                 supabaseAuth.signOut()
-                throw Exception(
-                    "Access denied. '${userData.email}' is not in the admin list.\n" +
-                    "Add this email to AdminConfig.ADMIN_EMAILS in User.kt."
-                )
+                throw Exception("Access denied. This account is not assigned the admin role.")
             }
 
             Log.d(TAG, "Admin login successful: ${userData.email}")
@@ -149,14 +140,14 @@ class AuthRepository @Inject constructor(
             // This will fail if email already exists in auth.users
             // Pass name and role in user metadata so the server-side trigger can read them.
             // This is necessary because email confirmation means no active session exists
-            // after signUpWith — RLS blocks any direct DB write at this point.
+            // after signUpWith; RLS blocks any direct DB write at this point.
             val result = try {
                 supabaseAuth.signUpWith(Email) {
                     this.email = email
                     this.password = password
                     this.data = kotlinx.serialization.json.buildJsonObject {
                         put("name", name)
-                        put("role", role)
+                        put("requested_role", role)
                     }
                 }
             } catch (authError: Exception) {
@@ -171,8 +162,8 @@ class AuthRepository @Inject constructor(
 
             val userId = result?.id ?: throw Exception("Failed to get user ID from registration")
 
-            // Return the user object — the trigger will have written the correct role to the DB
-            emit(Resource.Success(User(id = userId, email = email, name = name, role = role)))
+            // Return the user object; the trigger will have written the correct role to the DB.
+            emit(Resource.Success(User(id = userId, email = email, name = name, role = AdminConfig.CUSTOMER_ROLE)))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Registration failed"))
         }
@@ -281,9 +272,14 @@ class AuthRepository @Inject constructor(
     suspend fun updateUserProfile(user: User): Flow<Resource<User>> = flow {
         emit(Resource.Loading())
         try {
-            // Update user in users table
+            val profileUpdate = UserProfileUpdate(
+                name = user.name,
+                phone = user.phone,
+                profileImageUrl = user.profileImageUrl
+            )
+
             supabaseDb.from("users")
-                .update(user) {
+                .update(profileUpdate) {
                     filter {
                         eq("id", user.id)
                     }
@@ -300,6 +296,29 @@ class AuthRepository @Inject constructor(
             supabaseAuth.signOut()
         } catch (e: Exception) {
             // Handle logout error
+        }
+    }
+
+    suspend fun deleteAccount(): Flow<Resource<Boolean>> = flow {
+        emit(Resource.Loading())
+        try {
+            val accessToken = supabaseAuth.currentAccessTokenOrNull()
+                ?: throw Exception("Session expired. Please log in again.")
+
+            val response = apiService.deleteAccount("Bearer $accessToken")
+            if (!response.isSuccessful) {
+                throw Exception(response.errorBody()?.string() ?: "Failed to delete account")
+            }
+
+            try {
+                supabaseAuth.signOut()
+            } catch (_: Exception) {
+                // The backend may have already removed the auth user; local state is cleared by the ViewModel.
+            }
+
+            emit(Resource.Success(true))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to delete account"))
         }
     }
 
@@ -320,13 +339,6 @@ class AuthRepository @Inject constructor(
     suspend fun fetchUserRole(email: String): Flow<Resource<String>> = flow {
         emit(Resource.Loading())
         try {
-            // First check if email is in the hardcoded admin list
-            if (AdminConfig.ADMIN_EMAILS.any { it.equals(email, ignoreCase = true) }) {
-                emit(Resource.Success(AdminConfig.ADMIN_ROLE))
-                return@flow
-            }
-
-            // Otherwise, query the users table
             val userData = supabaseDb.from("users")
                 .select(columns = Columns.list("role")) {
                     filter {
@@ -358,3 +370,13 @@ class AuthRepository @Inject constructor(
         }
     }
 }
+
+@Serializable
+private data class UserProfileUpdate(
+    @SerialName("name")
+    val name: String,
+    @SerialName("phone")
+    val phone: String,
+    @SerialName("profile_image_url")
+    val profileImageUrl: String?
+)

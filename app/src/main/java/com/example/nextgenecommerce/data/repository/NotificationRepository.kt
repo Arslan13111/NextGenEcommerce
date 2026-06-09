@@ -11,15 +11,20 @@ class NotificationRepository @Inject constructor(
     private val notificationDao: NotificationDao
 ) {
 
-    fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()
+    fun getAllNotifications(userId: String): Flow<List<NotificationEntity>> =
+        notificationDao.getAllNotifications(userId)
 
-    fun getUnreadNotifications(): Flow<List<NotificationEntity>> = notificationDao.getUnreadNotifications()
+    fun getUnreadNotifications(userId: String): Flow<List<NotificationEntity>> =
+        notificationDao.getUnreadNotifications(userId)
 
-    fun getUnreadNotificationCount(): Flow<Int> = notificationDao.getUnreadNotificationCount()
+    fun getUnreadNotificationCount(userId: String): Flow<Int> =
+        notificationDao.getUnreadNotificationCount(userId)
 
-    suspend fun getNotificationById(notificationId: Int): NotificationEntity? {
-        return notificationDao.getNotificationById(notificationId)
-    }
+    suspend fun getNotificationById(notificationId: Int): NotificationEntity? =
+        notificationDao.getNotificationById(notificationId)
+
+    suspend fun existsBySupabaseId(supabaseId: String): Boolean =
+        notificationDao.existsBySupabaseId(supabaseId)
 
     suspend fun addNotification(notification: NotificationEntity) {
         notificationDao.insertNotification(notification)
@@ -29,31 +34,23 @@ class NotificationRepository @Inject constructor(
         notificationDao.insertNotifications(notifications)
     }
 
-    suspend fun updateNotification(notification: NotificationEntity) {
-        notificationDao.updateNotification(notification)
-    }
-
     suspend fun markAsRead(notificationId: Int) {
         notificationDao.markAsRead(notificationId)
     }
 
-    suspend fun markAllAsRead() {
-        notificationDao.markAllAsRead()
-    }
-
-    suspend fun deleteNotification(notification: NotificationEntity) {
-        notificationDao.deleteNotification(notification)
+    suspend fun markAllAsRead(userId: String) {
+        notificationDao.markAllAsRead(userId)
     }
 
     suspend fun deleteNotificationById(notificationId: Int) {
         notificationDao.deleteNotificationById(notificationId)
     }
 
-    suspend fun clearAllNotifications() {
-        notificationDao.clearAllNotifications()
+    suspend fun clearAllNotifications(userId: String) {
+        notificationDao.clearAllNotifications(userId)
     }
 
-    suspend fun deleteReadNotifications() {
-        notificationDao.deleteReadNotifications()
+    suspend fun deleteReadNotifications(userId: String) {
+        notificationDao.deleteReadNotifications(userId)
     }
 }

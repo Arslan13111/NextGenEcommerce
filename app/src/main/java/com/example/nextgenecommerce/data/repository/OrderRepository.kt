@@ -6,6 +6,7 @@ import com.example.nextgenecommerce.data.models.OrderItem
 import com.example.nextgenecommerce.data.models.OrderStatus
 import com.example.nextgenecommerce.data.models.PaymentMethod
 import com.example.nextgenecommerce.data.models.PaymentStatus
+import com.example.nextgenecommerce.data.remote.ApiService
 import com.example.nextgenecommerce.data.remote.CreateOrderRequest
 import com.example.nextgenecommerce.util.Resource
 import io.github.jan.supabase.gotrue.Auth
@@ -15,7 +16,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +23,8 @@ import javax.inject.Singleton
 class OrderRepository @Inject constructor(
     private val orderDao: OrderDao,
     private val supabaseAuth: Auth,
-    private val supabaseDb: Postgrest
+    private val supabaseDb: Postgrest,
+    private val apiService: ApiService
 ) {
 
     fun getAllOrders(): Flow<List<Order>> = orderDao.getAllOrders()
@@ -36,109 +37,24 @@ class OrderRepository @Inject constructor(
         try {
             val userId = supabaseAuth.currentUserOrNull()?.id
                 ?: throw Exception("User not logged in")
+            val accessToken = supabaseAuth.currentAccessTokenOrNull()
+                ?: throw Exception("Session expired. Please log in again.")
 
-            val totalSubtotal = request.items.sumOf { it.price * it.quantity }
-            val totalShipping = if (totalSubtotal > 5000.0) 0.0 else 200.0
-            val totalDiscount = request.discountAmount.coerceAtLeast(0.0)
+            val response = apiService.createOrder(
+                authorization = "Bearer $accessToken",
+                request = request.copy(userId = userId)
+            )
 
-            val orderInserts = mutableListOf<OrderInsert>()
-            val itemInserts  = mutableListOf<OrderItemInsert>()
-            val txnInserts   = mutableListOf<PaymentTransactionInsert>()
-            val roomOrders   = mutableListOf<Order>()
-
-            val now           = System.currentTimeMillis()
-            // One shared ID links all sub-orders from this checkout session
-            val parentOrderId = UUID.randomUUID().toString()
-
-            // Group items by retailer (empty retailerId = no specific store / admin product)
-            val groups = request.items.groupBy { it.retailerId.ifEmpty { "no_retailer" } }
-
-            groups.entries.forEachIndexed { groupIndex, (retailerKey, groupItems) ->
-                val groupSubtotal = groupItems.sumOf { it.price * it.quantity }
-                val groupTax      = groupSubtotal * 0.08
-
-                // Distribute shipping & discount proportionally across retailer groups
-                val weight      = if (totalSubtotal > 0) groupSubtotal / totalSubtotal else 1.0 / groups.size
-                val groupShip   = totalShipping * weight
-                val groupDisc   = totalDiscount * weight
-                val groupTotal  = (groupSubtotal + groupTax + groupShip - groupDisc).coerceAtLeast(0.0)
-
-                val orderId     = UUID.randomUUID().toString()
-                val orderNumber = "ORD-$now-${groupIndex + 1}"
-                val retailerId  = if (retailerKey == "no_retailer") null else retailerKey
-
-                orderInserts.add(OrderInsert(
-                    id             = orderId,
-                    userId         = userId,
-                    orderNumber    = orderNumber,
-                    subtotal       = groupSubtotal,
-                    tax            = groupTax,
-                    shipping       = groupShip,
-                    total          = groupTotal,
-                    currency       = "PKR",
-                    status         = "PENDING",
-                    paymentStatus  = "PENDING",
-                    paymentMethod  = request.paymentMethod,
-                    shippingAddressId = null,
-                    retailerId     = retailerId,
-                    parentOrderId  = parentOrderId
-                ))
-
-                groupItems.forEach { item ->
-                    itemInserts.add(OrderItemInsert(
-                        orderId      = orderId,
-                        productId    = item.productId,
-                        productName  = item.productName,
-                        productImage = item.productImage,
-                        price        = item.price,
-                        quantity     = item.quantity,
-                        selectedSize  = item.selectedSize,
-                        selectedColor = item.selectedColor
-                    ))
-                }
-
-                txnInserts.add(PaymentTransactionInsert(
-                    orderId       = orderId,
-                    paymentMethod = request.paymentMethod,
-                    transactionId = "TXN-$orderId",
-                    status        = "PENDING",
-                    amount        = groupTotal,
-                    currency      = "PKR",
-                    otpVerified   = false
-                ))
-
-                roomOrders.add(Order(
-                    id              = orderId,
-                    userId          = userId,
-                    orderNumber     = orderNumber,
-                    items           = groupItems,
-                    subtotal        = groupSubtotal,
-                    tax             = groupTax,
-                    shipping        = groupShip,
-                    total           = groupTotal,
-                    currency        = "PKR",
-                    status          = OrderStatus.PENDING,
-                    paymentStatus   = PaymentStatus.PENDING,
-                    paymentMethod   = runCatching { PaymentMethod.valueOf(request.paymentMethod) }
-                                        .getOrDefault(PaymentMethod.CASH_ON_DELIVERY),
-                    shippingAddress = request.shippingAddress,
-                    retailerId      = retailerId,
-                    parentOrderId   = parentOrderId,
-                    createdAt       = now,
-                    updatedAt       = now
-                ))
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string()
+                throw Exception(errorBody ?: "Failed to place order")
             }
 
-            // 1. Batch insert into Supabase
-            supabaseDb.from("orders").insert(orderInserts)
-            try { supabaseDb.from("order_items").insert(itemInserts) } catch (_: Exception) {}
-            try { supabaseDb.from("payment_transactions").insert(txnInserts) } catch (_: Exception) {}
+            val createdOrder = response.body()?.order
+                ?: throw Exception("Server did not return an order")
 
-            // 2. Save all to Room
-            roomOrders.forEach { orderDao.insertOrder(it) }
-
-            emit(if (roomOrders.isNotEmpty()) Resource.Success(roomOrders.first())
-                 else Resource.Error("No items in order"))
+            orderDao.insertOrder(createdOrder)
+            emit(Resource.Success(createdOrder))
         } catch (e: Exception) {
             emit(Resource.Error(e.message ?: "Failed to place order"))
         }
@@ -203,31 +119,102 @@ class OrderRepository @Inject constructor(
         }
     }
 
-    suspend fun acceptReturn(orderId: String, adminNote: String): Flow<Resource<Unit>> = flow {
+    suspend fun approveReturn(orderId: String, note: String): Flow<Resource<Unit>> = flow {
         emit(Resource.Loading())
         try {
             try {
                 supabaseDb.from("orders").update(
-                    AcceptReturnUpdate(status = "RETURNED", adminReturnNote = adminNote)
+                    AcceptReturnUpdate(status = "RETURN_APPROVED", adminReturnNote = note)
                 ) { filter { eq("id", orderId) } }
             } catch (_: Exception) {
                 supabaseDb.from("orders").update(
-                    OrderStatusUpdate(status = "RETURNED")
+                    OrderStatusUpdate(status = "RETURN_APPROVED")
                 ) { filter { eq("id", orderId) } }
             }
             val existing = orderDao.getOrderByIdOnce(orderId)
             if (existing != null) {
                 orderDao.updateOrder(
                     existing.copy(
-                        status = OrderStatus.RETURNED,
-                        adminReturnNote = adminNote,
+                        status = OrderStatus.RETURN_APPROVED,
+                        adminReturnNote = note,
                         updatedAt = System.currentTimeMillis()
                     )
                 )
             }
             emit(Resource.Success(Unit))
         } catch (e: Exception) {
-            emit(Resource.Error(e.message ?: "Failed to accept return"))
+            emit(Resource.Error(e.message ?: "Failed to approve return"))
+        }
+    }
+
+    // Kept for backward compat with admin return flow
+    suspend fun acceptReturn(orderId: String, adminNote: String): Flow<Resource<Unit>> =
+        approveReturn(orderId, adminNote)
+
+    suspend fun markReturnPickedUp(orderId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            supabaseDb.from("orders").update(
+                OrderStatusUpdate(status = "RETURN_IN_TRANSIT")
+            ) { filter { eq("id", orderId) } }
+            val existing = orderDao.getOrderByIdOnce(orderId)
+            if (existing != null) {
+                orderDao.updateOrder(existing.copy(status = OrderStatus.RETURN_IN_TRANSIT, updatedAt = System.currentTimeMillis()))
+            }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to mark return as picked up"))
+        }
+    }
+
+    suspend fun markReturnDeliveredToRetailer(orderId: String): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            supabaseDb.from("orders").update(
+                OrderStatusUpdate(status = "RETURN_RECEIVED")
+            ) { filter { eq("id", orderId) } }
+            val existing = orderDao.getOrderByIdOnce(orderId)
+            if (existing != null) {
+                orderDao.updateOrder(existing.copy(status = OrderStatus.RETURN_RECEIVED, updatedAt = System.currentTimeMillis()))
+            }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to mark return as delivered to retailer"))
+        }
+    }
+
+    suspend fun verifyAndCompleteReturn(orderId: String, retailerId: String, orderTotal: Double): Flow<Resource<Unit>> = flow {
+        emit(Resource.Loading())
+        try {
+            // 1. Mark order as fully returned and refunded
+            supabaseDb.from("orders").update(
+                VerifyReturnUpdate(status = "RETURNED", paymentStatus = "REFUNDED")
+            ) { filter { eq("id", orderId) } }
+            // 2. Deduct from retailer revenue (read-then-write)
+            try {
+                val rows = supabaseDb.from("retailers")
+                    .select { filter { eq("id", retailerId) }; limit(1) }
+                    .decodeList<RetailerRevenueRow>()
+                val current = rows.firstOrNull()?.totalRevenue ?: 0.0
+                val updated = (current - orderTotal).coerceAtLeast(0.0)
+                supabaseDb.from("retailers").update(
+                    RetailerRevenueUpdate(totalRevenue = updated)
+                ) { filter { eq("id", retailerId) } }
+            } catch (_: Exception) { /* revenue deduction best-effort */ }
+            // 3. Update Room
+            val existing = orderDao.getOrderByIdOnce(orderId)
+            if (existing != null) {
+                orderDao.updateOrder(
+                    existing.copy(
+                        status = OrderStatus.RETURNED,
+                        paymentStatus = PaymentStatus.REFUNDED,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            emit(Resource.Error(e.message ?: "Failed to complete return and refund"))
         }
     }
 
@@ -325,7 +312,7 @@ class OrderRepository @Inject constructor(
         emit(Resource.Loading())
         try {
             val rows = supabaseDb.from("orders")
-                .select(Columns.raw("*, order_items(*)"))
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)"))
                 .decodeList<SupabaseOrderRow>()
             val orders = rows.map { it.toOrder() }
             orders.forEach { orderDao.insertOrder(it) }
@@ -357,7 +344,7 @@ class OrderRepository @Inject constructor(
         emit(Resource.Loading())
         try {
             val rows = supabaseDb.from("orders")
-                .select(Columns.raw("*, order_items(*)")) {
+                .select(Columns.raw("*, order_items(*), shipping_addresses!shipping_address_id(*)")) {
                     filter { eq("user_id", userId) }
                 }
                 .decodeList<SupabaseOrderRow>()
@@ -369,12 +356,14 @@ class OrderRepository @Inject constructor(
                     // Preserve local user-initiated status changes that may not have synced to Supabase yet.
                     // RETURN_REQUESTED and CANCELLED are set on-device; if Supabase still shows an earlier
                     // status, the local value is more up-to-date.
+                    val returnStatuses = setOf(
+                        OrderStatus.RETURN_REQUESTED, OrderStatus.RETURN_APPROVED,
+                        OrderStatus.RETURN_IN_TRANSIT, OrderStatus.RETURN_RECEIVED,
+                        OrderStatus.RETURNED, OrderStatus.RETURN_REJECTED
+                    )
                     val keepLocalStatus =
-                        (existing.status == OrderStatus.RETURN_REQUESTED &&
-                            remote.status != OrderStatus.RETURN_REQUESTED &&
-                            remote.status != OrderStatus.RETURNED) ||
-                        (existing.status == OrderStatus.CANCELLED &&
-                            remote.status != OrderStatus.CANCELLED)
+                        (existing.status in returnStatuses && remote.status == OrderStatus.DELIVERED) ||
+                        (existing.status == OrderStatus.CANCELLED && remote.status != OrderStatus.CANCELLED)
                     remote.copy(
                         status = if (keepLocalStatus) existing.status else remote.status,
                         returnReason = remote.returnReason ?: existing.returnReason,
@@ -411,6 +400,22 @@ private data class ReturnRequestUpdate(
 private data class AcceptReturnUpdate(
     @SerialName("status") val status: String,
     @SerialName("admin_return_note") val adminReturnNote: String
+)
+
+@Serializable
+private data class VerifyReturnUpdate(
+    @SerialName("status") val status: String,
+    @SerialName("payment_status") val paymentStatus: String
+)
+
+@Serializable
+private data class RetailerRevenueUpdate(
+    @SerialName("total_revenue") val totalRevenue: Double
+)
+
+@Serializable
+private data class RetailerRevenueRow(
+    @SerialName("total_revenue") val totalRevenue: Double = 0.0
 )
 
 @Serializable
@@ -486,6 +491,28 @@ private data class PaymentTransactionInsert(
 // ── Supabase read helpers ─────────────────────────────────────────────────────
 
 @Serializable
+private data class SupabaseAddressRow(
+    @SerialName("id")            val id: String = "",
+    @SerialName("user_id")       val userId: String = "",
+    @SerialName("label")         val label: String = "",
+    @SerialName("full_name")     val fullName: String = "",
+    @SerialName("phone")         val phone: String = "",
+    @SerialName("address_line1") val addressLine1: String = "",
+    @SerialName("address_line2") val addressLine2: String = "",
+    @SerialName("city")          val city: String = "",
+    @SerialName("province")      val province: String = "",
+    @SerialName("postal_code")   val postalCode: String = "",
+    @SerialName("country")       val country: String = "Pakistan",
+    @SerialName("is_default")    val isDefault: Boolean = false
+) {
+    fun toAddress() = com.example.nextgenecommerce.data.models.Address(
+        id = id, userId = userId, label = label, fullName = fullName,
+        phone = phone, addressLine1 = addressLine1, addressLine2 = addressLine2,
+        city = city, province = province, postalCode = postalCode, country = country
+    )
+}
+
+@Serializable
 private data class SupabaseOrderRow(
     @SerialName("id") val id: String = "",
     @SerialName("user_id") val userId: String = "",
@@ -507,7 +534,8 @@ private data class SupabaseOrderRow(
     @SerialName("admin_return_note") val adminReturnNote: String? = null,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("updated_at") val updatedAt: String = "",
-    @SerialName("order_items") val orderItems: List<SupabaseOrderItemRow> = emptyList()
+    @SerialName("order_items") val orderItems: List<SupabaseOrderItemRow> = emptyList(),
+    @SerialName("shipping_addresses") val shippingAddress: SupabaseAddressRow? = null
 ) {
     fun toOrder() = Order(
         id = id,
@@ -529,6 +557,7 @@ private data class SupabaseOrderRow(
         returnReason = returnReason,
         returnImages = returnImages,
         adminReturnNote = adminReturnNote,
+        shippingAddress = shippingAddress?.toAddress(),
         createdAt = runCatching {
             java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
                 .parse(createdAt)?.time ?: System.currentTimeMillis()

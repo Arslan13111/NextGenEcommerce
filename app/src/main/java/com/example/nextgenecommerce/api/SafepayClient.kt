@@ -1,5 +1,6 @@
 package com.example.nextgenecommerce.api
 
+import com.example.nextgenecommerce.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -8,16 +9,18 @@ import java.util.concurrent.TimeUnit
 
 object SafepayClient {
 
-    const val SAFEPAY_ENV        = "sandbox"
-    const val SAFEPAY_PUBLIC_KEY = "sec_9f434394-c7a1-4725-ad25-1ece9333e1f4"
-    const val SAFEPAY_SECRET_KEY = "5ee3d978c15c99591255bd6a2805e32c783d108e0ea9c660762dbebb1a95027f"
+    val SAFEPAY_ENV: String = BuildConfig.SAFEPAY_ENV
+    val SAFEPAY_PUBLIC_KEY: String = BuildConfig.SAFEPAY_PUBLIC_KEY
 
-    private const val BASE_URL = "https://sandbox.api.getsafepay.com/"
-    // Production: "https://api.getsafepay.com/"
+    private val BASE_URL = BuildConfig.SAFEPAY_API_BASE_URL
 
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.ENABLE_HTTP_LOGGING) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         })
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

@@ -1,5 +1,7 @@
 package com.example.nextgenecommerce.presentation.screens.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -14,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +32,7 @@ data class FAQ(
 fun HelpCenterScreen(
     navController: NavController
 ) {
+    val context = LocalContext.current
     val faqs = remember {
         listOf(
             FAQ(
@@ -69,7 +73,7 @@ fun HelpCenterScreen(
             ),
             FAQ(
                 "How do I contact customer support?",
-                "You can reach us via email at support@nextgenecommerce.com or call us at +1 (555) 123-4567. Our support team is available Monday-Friday, 9 AM - 6 PM EST."
+                "You can reach us via email at softzenixsolutions@gmail.com or call us at 03180078338. Our support team is available Monday-Friday, 9 AM - 6 PM EST."
             )
         )
     }
@@ -157,15 +161,25 @@ fun HelpCenterScreen(
                     ContactCard(
                         icon = Icons.Default.Email,
                         title = "Email Support",
-                        subtitle = "support@nextgenecommerce.com",
-                        onClick = { /* TODO: Open email client */ }
+                        subtitle = "softzenixsolutions@gmail.com",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:softzenixsolutions@gmail.com")
+                            }
+                            context.startActivity(intent)
+                        }
                     )
 
                     ContactCard(
                         icon = Icons.Default.Phone,
                         title = "Phone Support",
-                        subtitle = "+1 (555) 123-4567",
-                        onClick = { /* TODO: Open phone dialer */ }
+                        subtitle = "03180078338",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_DIAL).apply {
+                                data = Uri.parse("tel:03180078338")
+                            }
+                            context.startActivity(intent)
+                        }
                     )
 
                     ContactCard(
